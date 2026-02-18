@@ -183,13 +183,13 @@
             canvas.height = window.innerHeight - 50; // Adjust for footer
 
             const maxPossibleCell = Math.min(
-                canvas.width / GRID_SIZE,
+                (canvas.width * 0.85) / GRID_SIZE,
                 (canvas.height * 0.75) / GRID_SIZE
             );
 
             cellSize = Math.floor(maxPossibleCell);
 
-            // Equal padding on left and right
+            // Center grid with equal padding on both sides
             gridLeft = (canvas.width - GRID_SIZE * cellSize) / 2;
             gridTop = Math.max(cellSize * 2, (canvas.height - GRID_SIZE * cellSize - 100) / 2);
 
