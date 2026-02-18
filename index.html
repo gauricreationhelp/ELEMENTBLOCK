@@ -9,9 +9,6 @@
             margin: 0;
             overflow: hidden;
             background: linear-gradient(135deg, #1a237e, #0d47a1);
-            display: flex;
-            justify-content: center;
-            align-items: center;
             font-family: 'Arial Black', Arial, sans-serif;
             touch-action: none;
         }
@@ -24,12 +21,12 @@
             bottom: 0;
             left: 0;
             right: 0;
-            height: 90px;
+            height: 50px;
             background: rgba(0,0,0,0.7);
             color: white;
             text-align: center;
-            line-height: 90px;
-            font-size: 18px;
+            line-height: 50px;
+            font-size: 16px;
             z-index: 100;
             pointer-events: none;
         }
@@ -171,23 +168,23 @@
         }
 
         // ──────────────── CHANGED ────────────────
-        // Grid ko thoda niche kiya (top margin badhaya)
+        // Adjusted resize for reduced footer height, moved grid and pieces up, reduced gaps
         let cellSize, gridLeft, gridTop, bottomTop;
         function resize() {
             canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
+            canvas.height = window.innerHeight - 50;
 
             const maxPossibleCell = Math.min(
                 canvas.width / GRID_SIZE,
-                (canvas.height * 0.68) / GRID_SIZE   // ← yaha 0.78 → 0.68 karke niche kiya
+                (canvas.height * 0.75) / GRID_SIZE
             );
 
             cellSize = Math.floor(maxPossibleCell);
 
             gridLeft = (canvas.width - GRID_SIZE * cellSize) / 2;
-            gridTop = Math.max(cellSize * 2.2, (canvas.height - GRID_SIZE * cellSize - 140) / 2); // ← top margin badhaya
+            gridTop = Math.max(cellSize * 1.5, (canvas.height - GRID_SIZE * cellSize - 100) / 2);
 
-            bottomTop = gridTop + GRID_SIZE * cellSize + cellSize * 0.8;
+            bottomTop = gridTop + GRID_SIZE * cellSize + cellSize * 0.3;
         }
         // ────────────────────────────────────────
 
@@ -715,4 +712,4 @@
         requestAnimationFrame(animate);
     </script>
 </body>
-</html>
+</html> 
