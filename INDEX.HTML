@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Element Blocks Puzzle</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: linear-gradient(135deg, #1a237e, #0d47a1);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Arial Black', Arial, sans-serif;
+            touch-action: none;
+        }
+        #canvas {
+            display: block;
+            box-shadow: 0 0 30px rgba(0,0,0,0.5);
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Constants
+        const GRID_SIZE = 10;
+        let COLORS = ['#ff7518', '#00bfff', '#32cd32', '#9932cc', '#4169e1', '#ffd700', '#ff69b4', '#ff1493', '#00ff7f', '#daa520'];
+        const SHAPES = [
+            [[0,0]],
+            [[0,0],[1,0]], [[0,0],[0,1]],
+            [[0,0],[1,0],[2,0]], [[0,0],[0,1],[0,2]], [[0,0],[1,0],[0,1]], [[0,0],[1,0],[1,1]], [[0,0],[0,1],[1,1]], [[0,0],[1,0],[2,0],[1,1]],
+            [[0,0],[1,0],[2,0],[3,0]], [[0,0],[0,1],[0,2],[0,3]], [[0,0],[1,0],[2,0],[3,0],[1,1]],
+            [[0,0],[0,1],[1,0],[1,1]],
+            [[0,0],[1,0],[1,1],[2,1]], [[0,0],[0,1],[1,1],[1,2]],
+            [[0,0],[1,0],[2,0],[0,1]], [[0,0],[1,0],[2,0],[2,1]], [[0,0],[1,0],[2,0],[1,1]],
+            [[0,0],[0,1],[0,2],[1,1]], [[0,0],[1,0],[1,1],[1,2]]
+        ];
+
+        // Game state
+        let grid = Array.from({length: GRID_SIZE}, () => Array(GRID_SIZE).fill(null));
+        let pieces = [];
+        let score = 0;
+        let highScore = parseInt(localStorage.getItem('highScore')) || 0;
+        let dragging = null;
+        let offsetX = 0, offsetY = 0;
+        let candidateRow = -1, candidateCol = -1;
+        let gameOver = false;
+        let settingsOpen = false;
+        let soundOn = localStorage.getItem('soundOn') !== 'false';
+        let bgmOn = localStorage.getItem('bgmOn') !== 'false';
+        let skinOn = localStorage.getItem('skinOn') === 'true';
+        let particles = [];
+        let scorePopups = [];
+        let comboPopups = [];
+
+        // Audio
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        let bgmOscillator = null;
+        let bgmGainNode = null;
+        const NOTES = {
+            C4: 261.63, D4: 293.66, E4: 329.63, F4: 349.23, G4: 392.00, A4: 440.00, B4: 493.88,
+            C5: 523.25, D5: 587.33, E5: 659.25, F5: 698.46, G5: 783.99, A5: 880.00, B5: 987.77, C6: 1046.50
+        };
+
+        const speechSynth = window.speechSynthesis;
+
+        function speak(text) {
+            if (!soundOn) return;
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.volume = 1.0;
+            speechSynth.speak(utterance);
+        }
+
+        function playSound(freq, duration = 0.1, type = 'sine', volume = 0.2) {
+            if (!soundOn) return;
+            try {
+                const now = audioCtx.currentTime;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.frequency.setValueAtTime(freq, now);
+                osc.type = type;
+                gain.gain.setValueAtTime(volume, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+                osc.start(now);
+                osc.stop(now + duration);
+            } catch (e) {}
+        }
+
+        async function playMelody(freqs, durations) {
+            for (let i = 0; i < freqs.length; i++) {
+                playSound(freqs[i], durations[i]);
+                await new Promise(resolve => setTimeout(resolve, durations[i] * 1000 + 30));
+            }
+        }
+
+        function playBGM() {
+            if (!bgmOn || bgmOscillator) return;
+            try {
+                bgmOscillator = audioCtx.createOscillator();
+                bgmGainNode = audioCtx.createGain();
+                bgmOscillator.connect(bgmGainNode);
+                bgmGainNode.connect(audioCtx.destination);
+                bgmOscillator.type = 'triangle';
+                bgmGainNode.gain.value = 0.05;
+                bgmOscillator.start();
+                const melody = [NOTES.C5, NOTES.E5, NOTES.G5, NOTES.E5, NOTES.D5, NOTES.F5, NOTES.A5, NOTES.F5];
+                let idx = 0;
+                setInterval(() => {
+                    if (bgmOn && bgmOscillator) {
+                        bgmOscillator.frequency.setValueAtTime(melody[idx % melody.length], audioCtx.currentTime);
+                        idx++;
+                    }
+                }, 300);
+            } catch (e) {}
+        }
+
+        function stopBGM() {
+            if (bgmOscillator) {
+                bgmOscillator.stop();
+                bgmOscillator = null;
+            }
+        }
+
+        function playStartTune() {
+            playMelody([NOTES.C5, NOTES.E5, NOTES.G5, NOTES.C6], [0.15, 0.15, 0.15, 0.4]);
+        }
+
+        function playGameOverTune() {
+            playMelody([NOTES.G5, NOTES.F5, NOTES.E5, NOTES.D5, NOTES.C5], [0.2, 0.2, 0.2, 0.2, 0.5]);
+        }
+
+        function playPickSound() {
+            playSound(NOTES.B5, 0.05, 'square', 0.3);
+        }
+
+        function playPlaceSound() {
+            playSound(NOTES.G5, 0.1, 'sine', 0.25);
+        }
+
+        function playInvalidSound() {
+            playSound(200, 0.15, 'sawtooth', 0.2);
+        }
+
+        function playClearSound(count) {
+            playSound(NOTES.C6 + count * 50, 0.3 + count * 0.1, 'triangle', 0.4);
+        }
+
+        // Resize and layout
+        let cellSize, gridLeft, gridTop, bottomTop;
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            cellSize = Math.floor(Math.min(canvas.width / (GRID_SIZE + 2), canvas.height / (GRID_SIZE + 4)));
+            gridLeft = (canvas.width - GRID_SIZE * cellSize) / 2;
+            gridTop = cellSize * 2; // Increased space at top
+            bottomTop = gridTop + GRID_SIZE * cellSize + cellSize * 0.5;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        function generatePiece() {
+            const shapeIdx = Math.floor(Math.random() * SHAPES.length);
+            const shape = SHAPES[shapeIdx].map(([x, y]) => [x, y]);
+            const colorIdx = Math.floor(Math.random() * COLORS.length);
+            const color = COLORS[colorIdx];
+            const w = Math.max(...shape.map(p => p[0])) + 1;
+            const h = Math.max(...shape.map(p => p[1])) + 1;
+            return { shape, color, w, h };
+        }
+
+        function initPieces() {
+            pieces = [generatePiece(), generatePiece(), generatePiece()];
+        }
+
+        // Skin toggle - change colors
+        function applySkin() {
+            if (skinOn) {
+                COLORS = ['#ff4500', '#1e90ff', '#228b22', '#8a2be2', '#0000cd', '#f4a460', '#ff1493', '#00fa9a', '#b8860b', '#dc143c'];
+            } else {
+                COLORS = ['#ff7518', '#00bfff', '#32cd32', '#9932cc', '#4169e1', '#ffd700', '#ff69b4', '#ff1493', '#00ff7f', '#daa520'];
+            }
+        }
+
+        // Drawing helpers
+        function lighten(color, percent) {
+            const num = parseInt(color.replace('#', ''), 16);
+            const amt = Math.round(2.55 * percent);
+            let R = (num >> 16) + amt;
+            let G = (num >> 8 & 0x00FF) + amt;
+            let B = (num & 0x0000FF) + amt;
+            R = R > 255 ? 255 : R < 0 ? 0 : R;
+            G = G > 255 ? 255 : G < 0 ? 0 : G;
+            B = B > 255 ? 255 : B < 0 ? 0 : B;
+            return `rgb(${R},${G},${B})`;
+        }
+
+        function darken(color, percent) {
+            return lighten(color, -percent);
+        }
+
+        function drawBlock(x, y, color, size = cellSize, alpha = 1, isDragging = false) {
+            ctx.save();
+            ctx.globalAlpha = alpha;
+            if (isDragging) {
+                ctx.shadowColor = '#ffffff80';
+                ctx.shadowBlur = 15;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 0;
+            }
+            const radius = size * 0.1;
+            roundRect(x + 1, y + 1, size - 2, size - 2, radius);
+            const grad = ctx.createLinearGradient(x, y, x, y + size);
+            grad.addColorStop(0, lighten(color, 20));
+            grad.addColorStop(1, darken(color, 20));
+            ctx.fillStyle = grad;
+            ctx.fill();
+            ctx.strokeStyle = lighten(color, 40);
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        function drawPiece(piece, px, py, scale = 1, alpha = 1, isDragging = false) {
+            for (const [dx, dy] of piece.shape) {
+                drawBlock(px + dx * cellSize * scale, py + dy * cellSize * scale, piece.color, cellSize * scale, alpha, isDragging);
+            }
+        }
+
+        function drawGrid() {
+            ctx.fillStyle = '#0d1b2a';
+            roundRect(gridLeft - 5, gridTop - 5, GRID_SIZE * cellSize + 10, GRID_SIZE * cellSize + 10, 20);
+            ctx.fill();
+            ctx.strokeStyle = '#e0e0e020';
+            ctx.lineWidth = 1;
+            for (let i = 1; i < GRID_SIZE; i++) {
+                ctx.beginPath();
+                ctx.moveTo(gridLeft + i * cellSize, gridTop);
+                ctx.lineTo(gridLeft + i * cellSize, gridTop + GRID_SIZE * cellSize);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(gridLeft, gridTop + i * cellSize);
+                ctx.lineTo(gridLeft + GRID_SIZE * cellSize, gridTop + i * cellSize);
+                ctx.stroke();
+            }
+        }
+
+        function drawPlaced() {
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    if (grid[r][c]) {
+                        drawBlock(gridLeft + c * cellSize, gridTop + r * cellSize, grid[r][c]);
+                    }
+                }
+            }
+        }
+
+        function drawPieces() {
+            const slotWidth = canvas.width / 3;
+            const slotHeight = canvas.height - bottomTop - cellSize * 0.3;
+            for (let i = 0; i < pieces.length; i++) {
+                const p = pieces[i];
+                const scaleX = (slotWidth * 0.88) / (p.w * cellSize);
+                const scaleY = (slotHeight * 0.88) / (p.h * cellSize);
+                p.scale = Math.min(scaleX, scaleY, 0.95);
+                p.homeX = i * slotWidth + (slotWidth - p.w * cellSize * p.scale) / 2;
+                p.homeY = bottomTop + (slotHeight - p.h * cellSize * p.scale) / 2;
+                drawPiece(p, p.homeX, p.homeY, p.scale);
+            }
+        }
+
+        function drawUI() {
+            ctx.fillStyle = '#ffcc00';
+            ctx.font = `${cellSize * 0.7}px Arial`;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(`👑 ${highScore}`, cellSize * 0.5, cellSize * 0.8);
+            ctx.fillStyle = 'white';
+            ctx.font = `${cellSize * 1.5}px Arial`; // Smaller font
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(`${score}`, canvas.width / 2, cellSize * 0.8); // Moved up
+            ctx.fillStyle = '#a0a0a0';
+            ctx.font = `${cellSize * 0.8}px Arial`;
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('⚙️', canvas.width - cellSize * 0.5, cellSize * 0.8);
+        }
+
+        function roundRect(x, y, w, h, r) {
+            if (w < 2 * r) r = w / 2;
+            if (h < 2 * r) r = h / 2;
+            ctx.beginPath();
+            ctx.moveTo(x + r, y);
+            ctx.arcTo(x + w, y, x + w, y + h, r);
+            ctx.arcTo(x + w, y + h, x, y + h, r);
+            ctx.arcTo(x, y + h, x, y, r);
+            ctx.arcTo(x, y, x + w, y, r);
+            ctx.closePath();
+        }
+
+        function drawButton(x, y, w, h, text, bgColor, fgColor = '#fff') {
+            roundRect(x, y, w, h, h * 0.3);
+            ctx.fillStyle = bgColor;
+            ctx.fill();
+            ctx.fillStyle = fgColor;
+            ctx.font = `${h * 0.4}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, x + w / 2, y + h / 2);
+        }
+
+        function drawSettings() {
+            if (!settingsOpen) return;
+            const panelW = Math.min(canvas.width * 0.75, 400);
+            const panelH = canvas.height * 0.5;
+            const panelX = (canvas.width - panelW) / 2;
+            const panelY = (canvas.height - panelH) / 2 - cellSize;
+            roundRect(panelX, panelY, panelW, panelH, 20);
+            ctx.fillStyle = '#3d5a80';
+            ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.font = `${cellSize * 0.6}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.fillText('Settings', panelX + panelW / 2, panelY + cellSize * 0.5);
+            ctx.textAlign = 'right';
+            ctx.fillText('×', panelX + panelW - cellSize * 0.3, panelY + cellSize * 0.5);
+            const toggleY = panelY + cellSize;
+            ctx.font = `${cellSize * 0.4}px Arial`;
+            ctx.textAlign = 'left';
+            ctx.fillText('Sound', panelX + cellSize * 0.5, toggleY + cellSize * 0.3);
+            drawToggle(panelX + panelW - cellSize * 1.5, toggleY + cellSize * 0.15, cellSize * 0.5, soundOn);
+            ctx.fillText('BGM', panelX + cellSize * 0.5, toggleY + cellSize * 0.8);
+            drawToggle(panelX + panelW - cellSize * 1.5, toggleY + cellSize * 0.65, cellSize * 0.5, bgmOn);
+            ctx.fillText('Skin', panelX + cellSize * 0.5, toggleY + cellSize * 1.3);
+            drawToggle(panelX + panelW - cellSize * 1.5, toggleY + cellSize * 1.15, cellSize * 0.5, skinOn);
+            const btnY = toggleY + cellSize * 1.8;
+            const btnH = cellSize * 0.7;
+            drawButton(panelX + cellSize * 0.5, btnY, panelW - cellSize, btnH, '🎮 More Games', '#4caf50');
+            drawButton(panelX + cellSize * 0.5, btnY + btnH * 1.1, panelW - cellSize, btnH, '⚙️ More Settings', '#4caf50');
+            drawButton(panelX + cellSize * 0.5, btnY + btnH * 2.2, panelW - cellSize, btnH, '🔄 Replay', '#4caf50');
+        }
+
+        function drawToggle(x, y, size, on) {
+            roundRect(x, y, size * 1.8, size, size / 2);
+            ctx.fillStyle = on ? '#4caf50' : '#808080';
+            ctx.fill();
+            const knobR = size * 0.45;
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(on ? x + size * 1.4 : x + size * 0.4, y + size / 2, knobR, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawGameOver() {
+            if (!gameOver) return;
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#ffd700';
+            ctx.font = `${cellSize}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(score > highScore ? 'Best Score!' : 'Game Over', canvas.width / 2, canvas.height / 2 - cellSize);
+            ctx.fillStyle = '#fff';
+            ctx.font = `${cellSize * 1.5}px Arial`;
+            ctx.fillText(`${score}`, canvas.width / 2, canvas.height / 2 + cellSize * 0.5);
+            drawButton(canvas.width / 2 - cellSize * 1.5, canvas.height / 2 + cellSize * 2, cellSize * 3, cellSize, '▶ Play', '#ff8c00');
+        }
+
+        function addScorePopup(amount, x, y, color = '#ffcc00') {
+            scorePopups.push({ amount, x, y, life: 1, color });
+        }
+
+        function addComboPopup(text, x, y) {
+            comboPopups.push({ text, x, y, life: 1 });
+        }
+
+        // Particles
+        function emitParticles(centerX, centerY, color, num = 12) {
+            for (let i = 0; i < num; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 4 + Math.random() * 4;
+                particles.push({
+                    x: centerX,
+                    y: centerY,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    color,
+                    life: 1.0,
+                    size: 4 + Math.random() * 6
+                });
+            }
+        }
+
+        // Game logic
+        function canPlace(piece, row, col) {
+            if (row < 0 || col < 0 || row + piece.h > GRID_SIZE || col + piece.w > GRID_SIZE) return false;
+            for (const [dx, dy] of piece.shape) {
+                if (grid[row + dy][col + dx] !== null) return false;
+            }
+            return true;
+        }
+
+        function placePiece(piece, row, col) {
+            for (const [dx, dy] of piece.shape) {
+                grid[row + dy][col + dx] = piece.color;
+            }
+        }
+
+        function clearLines() {
+            const fullRows = [], fullCols = [];
+            for (let r = 0; r < GRID_SIZE; r++) {
+                if (grid[r].every(cell => cell !== null)) fullRows.push(r);
+            }
+            for (let c = 0; c < GRID_SIZE; c++) {
+                if (Array.from({length: GRID_SIZE}, (_, r) => grid[r][c]).every(cell => cell !== null)) fullCols.push(c);
+            }
+            const clearedCount = fullRows.length + fullCols.length;
+            if (clearedCount === 0) return 0;
+            // Particles and sound
+            fullRows.forEach(r => {
+                for (let c = 0; c < GRID_SIZE; c++) emitParticles(gridLeft + c * cellSize + cellSize / 2, gridTop + r * cellSize + cellSize / 2, grid[r][c]);
+            });
+            fullCols.forEach(c => {
+                for (let r = 0; r < GRID_SIZE; r++) if (!fullRows.includes(r)) emitParticles(gridLeft + c * cellSize + cellSize / 2, gridTop + r * cellSize + cellSize / 2, grid[r][c]);
+            });
+            playClearSound(clearedCount);
+            // Combo logic
+            let comboText = '';
+            let comboColor = '#ff4500';
+            if (clearedCount === 2) {
+                comboText = 'Good!';
+                speak('Good');
+            } else if (clearedCount === 3) {
+                comboText = 'Better!';
+                speak('Better');
+            } else if (clearedCount >= 4) {
+                comboText = 'Best!';
+                speak('Best');
+            }
+            if (comboText) {
+                addComboPopup(comboText, canvas.width / 2, gridTop + GRID_SIZE * cellSize / 2 + cellSize);
+            }
+            // Clear
+            fullRows.forEach(r => grid[r].fill(null));
+            fullCols.forEach(c => { for (let r = 0; r < GRID_SIZE; r++) grid[r][c] = null; });
+            return clearedCount;
+        }
+
+        function canPlaceAny() {
+            for (const p of pieces) {
+                for (let r = 0; r <= GRID_SIZE - p.h; r++) {
+                    for (let c = 0; c <= GRID_SIZE - p.w; c++) {
+                        if (canPlace(p, r, c)) return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function restart() {
+            grid = Array.from({length: GRID_SIZE}, () => Array(GRID_SIZE).fill(null));
+            pieces = [];
+            score = 0;
+            particles = [];
+            scorePopups = [];
+            comboPopups = [];
+            gameOver = false;
+            settingsOpen = false;
+            initPieces();
+            stopBGM();
+            playStartTune();
+            if (bgmOn) playBGM();
+            applySkin();
+        }
+
+        // Events
+        function getPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            const touch = e.touches ? e.touches[0] : e;
+            return { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
+        }
+
+        function handlePointerDown(e) {
+            e.preventDefault();
+            const pos = getPos(e);
+            if (gameOver) {
+                if (pos.x > canvas.width / 2 - cellSize * 1.5 && pos.x < canvas.width / 2 + cellSize * 1.5 &&
+                    pos.y > canvas.height / 2 + cellSize * 2 && pos.y < canvas.height / 2 + cellSize * 3) {
+                    restart();
+                }
+                return;
+            }
+            if (settingsOpen) {
+                const panelW = Math.min(canvas.width * 0.75, 400);
+                const panelX = (canvas.width - panelW) / 2;
+                const panelY = (canvas.height - canvas.height * 0.5) / 2 - cellSize;
+                if (pos.x > panelX + panelW - cellSize && pos.y < panelY + cellSize) {
+                    settingsOpen = false;
+                }
+                const toggleY = panelY + cellSize;
+                const toggleSize = cellSize * 0.5;
+                if (pos.x > panelX + panelW - cellSize * 2 && pos.x < panelX + panelW - cellSize * 0.5) {
+                    if (pos.y > toggleY && pos.y < toggleY + cellSize * 0.5) {
+                        soundOn = !soundOn;
+                        localStorage.setItem('soundOn', soundOn);
+                    } else if (pos.y > toggleY + cellSize * 0.5 && pos.y < toggleY + cellSize) {
+                        bgmOn = !bgmOn;
+                        localStorage.setItem('bgmOn', bgmOn);
+                        if (bgmOn) playBGM(); else stopBGM();
+                    } else if (pos.y > toggleY + cellSize && pos.y < toggleY + cellSize * 1.5) {
+                        skinOn = !skinOn;
+                        localStorage.setItem('skinOn', skinOn);
+                        applySkin();
+                        pieces.forEach(p => p.color = COLORS[Math.floor(Math.random() * COLORS.length)]);
+                    }
+                }
+                const btnY = toggleY + cellSize * 1.8;
+                const btnH = cellSize * 0.7;
+                if (pos.y > btnY && pos.y < btnY + btnH) {
+                    alert('More Games');
+                } else if (pos.y > btnY + btnH * 1.1 && pos.y < btnY + btnH * 2.1) {
+                    alert('More Settings');
+                } else if (pos.y > btnY + btnH * 2.2 && pos.y < btnY + btnH * 3.2) {
+                    restart();
+                    settingsOpen = false;
+                }
+                return;
+            }
+            if (pos.x > canvas.width - cellSize * 1.5 && pos.y < cellSize * 1.5) {
+                settingsOpen = true;
+                return;
+            }
+            for (let i = pieces.length - 1; i >= 0; i--) {
+                const p = pieces[i];
+                const minX = p.homeX;
+                const maxX = minX + p.w * cellSize * p.scale;
+                const minY = p.homeY;
+                const maxY = minY + p.h * cellSize * p.scale;
+                if (pos.x >= minX && pos.x <= maxX && pos.y >= minY && pos.y <= maxY) {
+                    dragging = p;
+                    offsetX = pos.x - minX;
+                    offsetY = pos.y - minY;
+                    pieces.splice(i, 1);
+                    playPickSound();
+                    break;
+                }
+            }
+        }
+
+        function handlePointerMove(e) {
+            if (!dragging) return;
+            const pos = getPos(e);
+            candidateCol = Math.floor((pos.x - offsetX - gridLeft) / cellSize);
+            candidateRow = Math.floor((pos.y - offsetY - gridTop) / cellSize);
+        }
+
+        function handlePointerUp(e) {
+            if (!dragging) return;
+            let valid = canPlace(dragging, candidateRow, candidateCol);
+            if (valid) {
+                placePiece(dragging, candidateRow, candidateCol);
+                playPlaceSound();
+                const cleared = clearLines();
+                const pieceScore = dragging.shape.length * 15;
+                let clearScore = cleared * 80 * cleared;
+                let bonus = 0;
+                if (cleared >= 2) {
+                    bonus = (cleared - 1) * 100 * cleared;
+                    addScorePopup(bonus, gridLeft + GRID_SIZE * cellSize / 2, gridTop + GRID_SIZE * cellSize / 2 + cellSize, '#00ff00'); // Separate bonus popup in green
+                }
+                const totalAdded = pieceScore + clearScore + bonus;
+                score += totalAdded;
+                addScorePopup(pieceScore + clearScore, gridLeft + GRID_SIZE * cellSize / 2, gridTop + GRID_SIZE * cellSize / 2);
+                if (score > highScore) {
+                    highScore = score;
+                    localStorage.setItem('highScore', highScore);
+                }
+                pieces.push(generatePiece());
+                if (!canPlaceAny()) {
+                    gameOver = true;
+                    playGameOverTune();
+                }
+            } else {
+                pieces.push(dragging);
+                playInvalidSound();
+            }
+            dragging = null;
+            candidateRow = -1;
+            candidateCol = -1;
+        }
+
+        // Touch support
+        canvas.addEventListener('pointerdown', handlePointerDown);
+        canvas.addEventListener('pointermove', handlePointerMove);
+        canvas.addEventListener('pointerup', handlePointerUp);
+        canvas.addEventListener('pointercancel', handlePointerUp);
+
+        // Animate
+        let lastTime = 0;
+        function animate(time) {
+            const dt = (time - lastTime) / 1000;
+            lastTime = time;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles = particles.filter(p => {
+                p.x += p.vx * 60 * dt;
+                p.y += p.vy * 60 * dt;
+                p.vy += 30 * dt;
+                p.life -= 2 * dt;
+                if (p.life > 0) {
+                    ctx.globalAlpha = p.life;
+                    ctx.fillStyle = p.color;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.globalAlpha = 1;
+                    return true;
+                }
+                return false;
+            });
+            scorePopups = scorePopups.filter(sp => {
+                sp.y -= 50 * dt;
+                sp.life -= dt;
+                if (sp.life > 0) {
+                    ctx.globalAlpha = sp.life;
+                    ctx.fillStyle = sp.color || '#ffcc00';
+                    ctx.font = `${cellSize * 0.6}px Arial`;
+                    ctx.textAlign = 'center';
+                    ctx.fillText(`+${sp.amount}`, sp.x, sp.y);
+                    ctx.globalAlpha = 1;
+                    return true;
+                }
+                return false;
+            });
+            comboPopups = comboPopups.filter(cp => {
+                cp.y -= 30 * dt;
+                cp.life -= 0.8 * dt;
+                if (cp.life > 0) {
+                    ctx.globalAlpha = cp.life;
+                    ctx.fillStyle = '#ff4500';
+                    ctx.font = `${cellSize * 0.8}px Arial Black`;
+                    ctx.textAlign = 'center';
+                    ctx.fillText(cp.text, cp.x, cp.y);
+                    ctx.globalAlpha = 1;
+                    return true;
+                }
+                return false;
+            });
+            drawGrid();
+            drawPlaced();
+            drawPieces();
+            if (dragging) {
+                const valid = canPlace(dragging, candidateRow, candidateCol);
+                drawPiece(dragging, gridLeft + candidateCol * cellSize, gridTop + candidateRow * cellSize, 1, valid ? 1 : 0.5, true);
+            }
+            drawUI();
+            drawSettings();
+            drawGameOver();
+            requestAnimationFrame(animate);
+        }
+
+        // Init
+        applySkin();
+        initPieces();
+        playStartTune();
+        if (bgmOn) playBGM();
+        requestAnimationFrame(animate);
+    </script>
+</body>
+</html>
