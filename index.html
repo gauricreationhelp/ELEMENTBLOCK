@@ -11,23 +11,38 @@
             background: linear-gradient(135deg, #1a237e, #0d47a1);
             font-family: 'Arial Black', Arial, sans-serif;
             touch-action: none;
-            height: 100vh;
         }
         #canvas {
             display: block;
             box-shadow: 0 0 30px rgba(0,0,0,0.5);
         }
-        /* Footer hata diya hai – ab koi ads nahi rahega */
+        #ad-footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 50px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            text-align: center;
+            line-height: 50px;
+            font-size: 16px;
+            z-index: 100;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
     <canvas id="canvas"></canvas>
+    <div id="ad-footer">Sponsored Ad / Google AdSense / Banner Space</div>
 
     <script>
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
 
+        // ──────────────── CHANGED ────────────────
         const GRID_SIZE = 8;
+        // ────────────────────────────────────────
 
         let COLORS = ['#ff7518', '#00bfff', '#32cd32', '#9932cc', '#4169e1', '#ffd700', '#ff69b4', '#ff1493', '#00ff7f', '#daa520'];
         const SHAPES = [
@@ -41,6 +56,7 @@
             [[0,0],[0,1],[0,2],[1,1]], [[0,0],[1,0],[1,1],[1,2]]
         ];
 
+        // Game state
         let grid = Array.from({length: GRID_SIZE}, () => Array(GRID_SIZE).fill(null));
         let pieces = [];
         let score = 0;
@@ -57,6 +73,7 @@
         let scorePopups = [];
         let comboPopups = [];
 
+        // Audio (same as before)
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         let bgmOscillator = null;
         let bgmGainNode = null;
@@ -71,7 +88,6 @@
             if (!soundOn) return;
             const utterance = new SpeechSynthesisUtterance(text);
             utterance.volume = 1.0;
-            utterance.rate = 0.7;
             speechSynth.speak(utterance);
         }
 
@@ -112,7 +128,7 @@
                 const melody = [NOTES.C5, NOTES.E5, NOTES.G5, NOTES.E5, NOTES.D5, NOTES.F5, NOTES.A5, NOTES.F5];
                 let idx = 0;
                 setInterval(() => {
-                    if (bgmOn && bgmOscillator && document.visibilityState === 'visible') {
+                    if (bgmOn && bgmOscillator) {
                         bgmOscillator.frequency.setValueAtTime(melody[idx % melody.length], audioCtx.currentTime);
                         idx++;
                     }
@@ -151,35 +167,26 @@
             playSound(NOTES.C6 + count * 50, 0.3 + count * 0.1, 'triangle', 0.4);
         }
 
-        // ──────────────── UPDATED LAYOUT – NO ADS, HEADER VISIBLE, PIECES SAFE ────────────────
+        // ──────────────── CHANGED ────────────────
+        // Adjusted resize for reduced footer height, moved grid and pieces up, reduced gaps
         let cellSize, gridLeft, gridTop, bottomTop;
         function resize() {
             canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
+            canvas.height = window.innerHeight - 50;
 
-            // Top reserved for header (score + icon)
-            const topReserved = 80;
+            const maxPossibleCell = Math.min(
+                canvas.width / GRID_SIZE,
+                (canvas.height * 0.75) / GRID_SIZE
+            );
 
-            // No footer ads – full bottom free, but keep small safety
-            const bottomReserved = 40; // only small gap for pieces comfort
-
-            const availableHeight = canvas.height - topReserved - bottomReserved;
-            const availableWidth = canvas.width * 0.94; // slight side padding
-
-            const maxCellW = availableWidth / GRID_SIZE;
-            const maxCellH = availableHeight * 0.82 / GRID_SIZE; // grid ko thoda bada
-
-            cellSize = Math.floor(Math.min(maxCellW, maxCellH));
+            cellSize = Math.floor(maxPossibleCell);
 
             gridLeft = (canvas.width - GRID_SIZE * cellSize) / 2;
+            gridTop = Math.max(cellSize * 1.5, (canvas.height - GRID_SIZE * cellSize - 100) / 2);
 
-            // Grid thoda upar shift kiya taaki header gap kam lage
-            gridTop = topReserved + 5; // ← yahan se grid upar shift hota hai
-
-            // Pieces footer area mein comfortably fit (no crushing)
-            bottomTop = gridTop + GRID_SIZE * cellSize + cellSize * 1.6;
+            bottomTop = gridTop + GRID_SIZE * cellSize + cellSize * 0.3;
         }
-        // ────────────────────────────────────────────────────────────────────────────────────────
+        // ────────────────────────────────────────
 
         window.addEventListener('resize', resize);
         resize();
@@ -280,11 +287,11 @@
 
         function drawPieces() {
             const slotWidth = canvas.width / 3;
-            const slotHeight = Math.max(120, canvas.height - bottomTop - 30);
+            const slotHeight = canvas.height - bottomTop;
             for (let i = 0; i < pieces.length; i++) {
                 const p = pieces[i];
-                const scaleX = (slotWidth * 0.88) / (p.w * cellSize);
-                const scaleY = (slotHeight * 0.88) / (p.h * cellSize);
+                const scaleX = (slotWidth * 0.9) / (p.w * cellSize);
+                const scaleY = (slotHeight * 0.85) / (p.h * cellSize);
                 p.scale = Math.min(scaleX, scaleY, 1.0);
                 p.homeX = i * slotWidth + (slotWidth - p.w * cellSize * p.scale) / 2;
                 p.homeY = bottomTop + (slotHeight - p.h * cellSize * p.scale) / 2;
@@ -293,27 +300,21 @@
         }
 
         function drawUI() {
-            const uiY = cellSize * 0.9;
             ctx.fillStyle = '#ffcc00';
-            ctx.font = `${cellSize * 0.65}px Arial Black`;
+            ctx.font = `${cellSize * 0.7}px Arial`;
             ctx.textAlign = 'left';
             ctx.textBaseline = 'middle';
-            ctx.fillText(`👑 ${highScore}`, cellSize * 0.6, uiY);
-
-            ctx.fillStyle = '#ffffff';
-            ctx.font = `900 ${cellSize * 1.1}px "Segoe UI Black", "Arial Black", Arial, sans-serif`;
+            ctx.fillText(`👑 ${highScore}`, cellSize * 0.5, cellSize * 0.8);
+            ctx.fillStyle = 'white';
+            ctx.font = `${cellSize * 1.5}px Arial`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.shadowColor = 'rgba(0,0,0,0.7)';
-            ctx.shadowBlur = 8;
-            ctx.fillText(score.toString(), canvas.width / 2, uiY);
-            ctx.shadowBlur = 0;
-
-            ctx.fillStyle = '#d0d0d0';
-            ctx.font = `${cellSize * 0.75}px Arial`;
+            ctx.fillText(`${score}`, canvas.width / 2, cellSize * 0.8);
+            ctx.fillStyle = '#a0a0a0';
+            ctx.font = `${cellSize * 0.8}px Arial`;
             ctx.textAlign = 'right';
             ctx.textBaseline = 'middle';
-            ctx.fillText('⚙️', canvas.width - cellSize * 0.6, uiY);
+            ctx.fillText('⚙️', canvas.width - cellSize * 0.5, cellSize * 0.8);
         }
 
         function roundRect(x, y, w, h, r) {
@@ -459,11 +460,11 @@
                 comboText = 'Good!';
                 speak('Good');
             } else if (clearedCount === 3) {
-                comboText = 'Wow!';
-                speak('Wow');
+                comboText = 'Better!';
+                speak('Better');
             } else if (clearedCount >= 4) {
-                comboText = 'Great!';
-                speak('Great');
+                comboText = 'Best!';
+                speak('Best');
             }
             if (comboText) {
                 addComboPopup(comboText, canvas.width / 2, gridTop + GRID_SIZE * cellSize / 2 + cellSize);
@@ -589,6 +590,8 @@
                 placePiece(dragging, candidateRow, candidateCol);
                 playPlaceSound();
 
+                // ──────────────── MOST IMPORTANT CHANGE ────────────────
+                // Score sirf clear hone par badhega
                 const cleared = clearLines();
                 let totalAdded = 0;
 
@@ -608,6 +611,7 @@
                         localStorage.setItem('highScore', highScore);
                     }
                 }
+                // ────────────────────────────────────────────────────────
 
                 pieces.push(generatePiece());
 
@@ -624,11 +628,13 @@
             candidateCol = -1;
         }
 
+        // Touch support
         canvas.addEventListener('pointerdown', handlePointerDown);
         canvas.addEventListener('pointermove', handlePointerMove);
         canvas.addEventListener('pointerup', handlePointerUp);
         canvas.addEventListener('pointercancel', handlePointerUp);
 
+        // Animate
         let lastTime = 0;
         function animate(time) {
             const dt = (time - lastTime) / 1000;
