@@ -17,25 +17,11 @@
             display: block;
             box-shadow: 0 0 30px rgba(0,0,0,0.5);
         }
-        #ad-footer {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            height: 90px;
-            background: rgba(0,0,0,0.75);
-            color: white;
-            text-align: center;
-            line-height: 90px;
-            font-size: 17px;
-            z-index: 100;
-            pointer-events: none;
-        }
+        /* Footer hata diya hai – ab koi ads nahi rahega */
     </style>
 </head>
 <body>
     <canvas id="canvas"></canvas>
-    <div id="ad-footer">Sponsored Ad / Google AdSense / Banner Space</div>
 
     <script>
         const canvas = document.getElementById('canvas');
@@ -165,34 +151,35 @@
             playSound(NOTES.C6 + count * 50, 0.3 + count * 0.1, 'triangle', 0.4);
         }
 
-        // ──────────────── FIXED LAYOUT – HEADER SAFE, FOOTER SAFE, NO OVERLAP ────────────────
+        // ──────────────── UPDATED LAYOUT – NO ADS, HEADER VISIBLE, PIECES SAFE ────────────────
         let cellSize, gridLeft, gridTop, bottomTop;
         function resize() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
 
-            // Fixed spaces – header ~80px top, footer 90px + 30px gap
-            const topReserved = 90;          // header + margin
-            const bottomReserved = 120;      // footer 90 + 30px safe gap
+            // Top reserved for header (score + icon)
+            const topReserved = 80;
+
+            // No footer ads – full bottom free, but keep small safety
+            const bottomReserved = 40; // only small gap for pieces comfort
 
             const availableHeight = canvas.height - topReserved - bottomReserved;
-            const availableWidth = canvas.width * 0.96; // slight side padding
+            const availableWidth = canvas.width * 0.94; // slight side padding
 
             const maxCellW = availableWidth / GRID_SIZE;
-            const maxCellH = availableHeight * 0.78 / GRID_SIZE;
+            const maxCellH = availableHeight * 0.82 / GRID_SIZE; // grid ko thoda bada
 
             cellSize = Math.floor(Math.min(maxCellW, maxCellH));
 
-            // Center grid horizontally
             gridLeft = (canvas.width - GRID_SIZE * cellSize) / 2;
 
-            // Grid ko center mein rakho – header ke niche, footer se door
-            gridTop = topReserved + (availableHeight - GRID_SIZE * cellSize) / 2;
+            // Grid thoda upar shift kiya taaki header gap kam lage
+            gridTop = topReserved + 5; // ← yahan se grid upar shift hota hai
 
-            // Pieces area footer se safe distance pe
-            bottomTop = gridTop + GRID_SIZE * cellSize + cellSize * 1.4;
+            // Pieces footer area mein comfortably fit (no crushing)
+            bottomTop = gridTop + GRID_SIZE * cellSize + cellSize * 1.6;
         }
-        // ─────────────────────────────────────────────────────────────────────────────────────
+        // ────────────────────────────────────────────────────────────────────────────────────────
 
         window.addEventListener('resize', resize);
         resize();
@@ -293,7 +280,7 @@
 
         function drawPieces() {
             const slotWidth = canvas.width / 3;
-            const slotHeight = canvas.height - bottomTop - 30; // extra safety margin
+            const slotHeight = Math.max(120, canvas.height - bottomTop - 30);
             for (let i = 0; i < pieces.length; i++) {
                 const p = pieces[i];
                 const scaleX = (slotWidth * 0.88) / (p.w * cellSize);
@@ -306,29 +293,27 @@
         }
 
         function drawUI() {
-            // High score (left)
+            const uiY = cellSize * 0.9;
             ctx.fillStyle = '#ffcc00';
             ctx.font = `${cellSize * 0.65}px Arial Black`;
             ctx.textAlign = 'left';
             ctx.textBaseline = 'middle';
-            ctx.fillText(`👑 ${highScore}`, cellSize * 0.6, cellSize * 0.9);
+            ctx.fillText(`👑 ${highScore}`, cellSize * 0.6, uiY);
 
-            // Current score – bold + nice + visible
             ctx.fillStyle = '#ffffff';
             ctx.font = `900 ${cellSize * 1.1}px "Segoe UI Black", "Arial Black", Arial, sans-serif`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.shadowColor = 'rgba(0,0,0,0.7)';
             ctx.shadowBlur = 8;
-            ctx.fillText(score.toString(), canvas.width / 2, cellSize * 0.9);
+            ctx.fillText(score.toString(), canvas.width / 2, uiY);
             ctx.shadowBlur = 0;
 
-            // Settings icon (right)
             ctx.fillStyle = '#d0d0d0';
             ctx.font = `${cellSize * 0.75}px Arial`;
             ctx.textAlign = 'right';
             ctx.textBaseline = 'middle';
-            ctx.fillText('⚙️', canvas.width - cellSize * 0.6, cellSize * 0.9);
+            ctx.fillText('⚙️', canvas.width - cellSize * 0.6, uiY);
         }
 
         function roundRect(x, y, w, h, r) {
