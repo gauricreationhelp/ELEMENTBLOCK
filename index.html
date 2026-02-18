@@ -27,8 +27,8 @@
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
 
-        // Constants
-        const GRID_SIZE = 10;
+        // Constants – Changed to 8×8 grid as per your request
+        const GRID_SIZE = 8;
         let COLORS = ['#ff7518', '#00bfff', '#32cd32', '#9932cc', '#4169e1', '#ffd700', '#ff69b4', '#ff1493', '#00ff7f', '#daa520'];
         const SHAPES = [
             [[0,0]],
@@ -152,25 +152,21 @@
             playSound(NOTES.C6 + count * 50, 0.3 + count * 0.1, 'triangle', 0.4);
         }
 
-        // Resize and layout – Optimized for mobile (full screen grid, minimal gap)
+        // Resize and layout – Grid thoda niche kiya, tiles attractive + bigger feel
         let cellSize, gridLeft, gridTop, bottomTop;
         function resize() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
 
-            // Grid ko maximum vertical space do, niche gap bilkul kam
-            const maxPossibleCell = Math.min(
-                canvas.width / GRID_SIZE,
-                (canvas.height * 0.78) / GRID_SIZE   // ~78% height grid ke liye
-            );
-
-            cellSize = Math.floor(maxPossibleCell);
+            // Grid ko attractive banane ke liye cell size bada rakha
+            cellSize = Math.floor(Math.min(
+                canvas.width / (GRID_SIZE + 1.5),           // left-right margin
+                canvas.height * 0.68 / GRID_SIZE           // vertical ~68% for bigger tiles feel
+            ));
 
             gridLeft = (canvas.width - GRID_SIZE * cellSize) / 2;
-            gridTop = Math.max(cellSize * 1.2, (canvas.height - GRID_SIZE * cellSize - 120) / 2); // top pe thoda margin
-
-            // Niche pieces ke liye minimum space
-            bottomTop = gridTop + GRID_SIZE * cellSize + cellSize * 0.8; // kam space niche
+            gridTop = cellSize * 1.8;                      // Grid thoda niche kiya taki upar space dikhe
+            bottomTop = gridTop + GRID_SIZE * cellSize + cellSize * 0.6; // niche ads/footer ke liye space
         }
         window.addEventListener('resize', resize);
         resize();
@@ -197,16 +193,16 @@
             }
         }
 
-        // Drawing helpers
+        // Drawing helpers – Tiles ko attractive banaya (glow + border)
         function lighten(color, percent) {
             const num = parseInt(color.replace('#', ''), 16);
             const amt = Math.round(2.55 * percent);
             let R = (num >> 16) + amt;
             let G = (num >> 8 & 0x00FF) + amt;
             let B = (num & 0x0000FF) + amt;
-            R = R > 255 ? 255 : R < 0 ? 0 : R;
-            G = G > 255 ? 255 : G < 0 ? 0 : G;
-            B = B > 255 ? 255 : B < 0 ? 0 : B;
+            R = Math.min(255, Math.max(0, R));
+            G = Math.min(255, Math.max(0, G));
+            B = Math.min(255, Math.max(0, B));
             return `rgb(${R},${G},${B})`;
         }
 
@@ -217,22 +213,29 @@
         function drawBlock(x, y, color, size = cellSize, alpha = 1, isDragging = false) {
             ctx.save();
             ctx.globalAlpha = alpha;
+
             if (isDragging) {
-                ctx.shadowColor = '#ffffff80';
-                ctx.shadowBlur = 15;
+                ctx.shadowColor = 'rgba(255,255,255,0.9)';
+                ctx.shadowBlur = 20;
                 ctx.shadowOffsetX = 0;
                 ctx.shadowOffsetY = 0;
             }
-            const radius = size * 0.1;
-            roundRect(x + 1, y + 1, size - 2, size - 2, radius);
-            const grad = ctx.createLinearGradient(x, y, x, y + size);
-            grad.addColorStop(0, lighten(color, 20));
-            grad.addColorStop(1, darken(color, 20));
+
+            const radius = size * 0.12; // zyada rounded tiles
+            roundRect(x + 2, y + 2, size - 4, size - 4, radius);
+
+            const grad = ctx.createLinearGradient(x, y, x + size, y + size);
+            grad.addColorStop(0, lighten(color, 35));
+            grad.addColorStop(0.5, color);
+            grad.addColorStop(1, darken(color, 25));
             ctx.fillStyle = grad;
             ctx.fill();
-            ctx.strokeStyle = lighten(color, 40);
-            ctx.lineWidth = 1;
+
+            // Attractive border glow
+            ctx.strokeStyle = lighten(color, 60);
+            ctx.lineWidth = 3;
             ctx.stroke();
+
             ctx.restore();
         }
 
@@ -243,11 +246,12 @@
         }
 
         function drawGrid() {
-            ctx.fillStyle = '#0d1b2a';
-            roundRect(gridLeft - 5, gridTop - 5, GRID_SIZE * cellSize + 10, GRID_SIZE * cellSize + 10, 20);
+            ctx.fillStyle = '#0a1f3a'; // dark attractive background
+            roundRect(gridLeft - 8, gridTop - 8, GRID_SIZE * cellSize + 16, GRID_SIZE * cellSize + 16, 25);
             ctx.fill();
-            ctx.strokeStyle = '#e0e0e020';
-            ctx.lineWidth = 1;
+
+            ctx.strokeStyle = 'rgba(100, 150, 255, 0.18)';
+            ctx.lineWidth = 1.5;
             for (let i = 1; i < GRID_SIZE; i++) {
                 ctx.beginPath();
                 ctx.moveTo(gridLeft + i * cellSize, gridTop);
@@ -272,12 +276,12 @@
 
         function drawPieces() {
             const slotWidth = canvas.width / 3;
-            const slotHeight = canvas.height - bottomTop; // ab niche ka space kam
+            const slotHeight = Math.max(80, canvas.height - bottomTop); // minimum height for pieces
             for (let i = 0; i < pieces.length; i++) {
                 const p = pieces[i];
-                const scaleX = (slotWidth * 0.9) / (p.w * cellSize);
-                const scaleY = (slotHeight * 0.85) / (p.h * cellSize);
-                p.scale = Math.min(scaleX, scaleY, 1.0);
+                const scaleX = (slotWidth * 0.92) / (p.w * cellSize);
+                const scaleY = (slotHeight * 0.88) / (p.h * cellSize);
+                p.scale = Math.min(scaleX, scaleY, 1.1); // thoda bada feel
                 p.homeX = i * slotWidth + (slotWidth - p.w * cellSize * p.scale) / 2;
                 p.homeY = bottomTop + (slotHeight - p.h * cellSize * p.scale) / 2;
                 drawPiece(p, p.homeX, p.homeY, p.scale);
@@ -286,20 +290,22 @@
 
         function drawUI() {
             ctx.fillStyle = '#ffcc00';
-            ctx.font = `${cellSize * 0.7}px Arial`;
+            ctx.font = `${cellSize * 0.8}px Arial`;
             ctx.textAlign = 'left';
             ctx.textBaseline = 'middle';
-            ctx.fillText(`👑 ${highScore}`, cellSize * 0.5, cellSize * 0.8);
+            ctx.fillText(`👑 ${highScore}`, cellSize * 0.6, cellSize * 0.9);
+
             ctx.fillStyle = 'white';
-            ctx.font = `${cellSize * 1.5}px Arial`;
+            ctx.font = `${cellSize * 1.8}px Arial`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(`${score}`, canvas.width / 2, cellSize * 0.8);
+            ctx.fillText(`${score}`, canvas.width / 2, cellSize * 1.0);
+
             ctx.fillStyle = '#a0a0a0';
-            ctx.font = `${cellSize * 0.8}px Arial`;
+            ctx.font = `${cellSize * 0.9}px Arial`;
             ctx.textAlign = 'right';
             ctx.textBaseline = 'middle';
-            ctx.fillText('⚙️', canvas.width - cellSize * 0.5, cellSize * 0.8);
+            ctx.fillText('⚙️', canvas.width - cellSize * 0.6, cellSize * 0.9);
         }
 
         function roundRect(x, y, w, h, r) {
@@ -319,51 +325,70 @@
             ctx.fillStyle = bgColor;
             ctx.fill();
             ctx.fillStyle = fgColor;
-            ctx.font = `${h * 0.4}px Arial`;
+            ctx.font = `${h * 0.45}px Arial`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(text, x + w / 2, y + h / 2);
         }
 
+        // Settings panel – Vertical + bigger + attractive
         function drawSettings() {
             if (!settingsOpen) return;
-            const panelW = Math.min(canvas.width * 0.75, 400);
-            const panelH = canvas.height * 0.5;
+            const panelW = Math.min(360, canvas.width * 0.82);
+            const panelH = Math.min(480, canvas.height * 0.70);
             const panelX = (canvas.width - panelW) / 2;
-            const panelY = (canvas.height - panelH) / 2 - cellSize;
-            roundRect(panelX, panelY, panelW, panelH, 20);
-            ctx.fillStyle = '#3d5a80';
+            const panelY = (canvas.height - panelH) / 2;
+
+            // Attractive panel background
+            roundRect(panelX, panelY, panelW, panelH, 28);
+            const panelGrad = ctx.createLinearGradient(panelX, panelY, panelX, panelY + panelH);
+            panelGrad.addColorStop(0, '#2a4a8e');
+            panelGrad.addColorStop(1, '#0f2b5e');
+            ctx.fillStyle = panelGrad;
             ctx.fill();
-            ctx.fillStyle = '#fff';
-            ctx.font = `${cellSize * 0.6}px Arial`;
+            ctx.strokeStyle = '#5a8cff';
+            ctx.lineWidth = 4;
+            ctx.stroke();
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = `${cellSize * 0.9}px Arial Black`;
             ctx.textAlign = 'center';
-            ctx.fillText('Settings', panelX + panelW / 2, panelY + cellSize * 0.5);
+            ctx.fillText('Settings', panelX + panelW / 2, panelY + cellSize * 1.0);
+
+            ctx.font = `${cellSize * 0.6}px Arial`;
             ctx.textAlign = 'right';
-            ctx.fillText('×', panelX + panelW - cellSize * 0.3, panelY + cellSize * 0.5);
-            const toggleY = panelY + cellSize;
-            ctx.font = `${cellSize * 0.4}px Arial`;
+            ctx.fillText('×', panelX + panelW - cellSize * 0.4, panelY + cellSize * 0.8);
+
+            const toggleY = panelY + cellSize * 1.8;
+            const spacing = cellSize * 1.1;
+            ctx.font = `${cellSize * 0.55}px Arial`;
             ctx.textAlign = 'left';
-            ctx.fillText('Sound', panelX + cellSize * 0.5, toggleY + cellSize * 0.3);
-            drawToggle(panelX + panelW - cellSize * 1.5, toggleY + cellSize * 0.15, cellSize * 0.5, soundOn);
-            ctx.fillText('BGM', panelX + cellSize * 0.5, toggleY + cellSize * 0.8);
-            drawToggle(panelX + panelW - cellSize * 1.5, toggleY + cellSize * 0.65, cellSize * 0.5, bgmOn);
-            ctx.fillText('Skin', panelX + cellSize * 0.5, toggleY + cellSize * 1.3);
-            drawToggle(panelX + panelW - cellSize * 1.5, toggleY + cellSize * 1.15, cellSize * 0.5, skinOn);
-            const btnY = toggleY + cellSize * 1.8;
-            const btnH = cellSize * 0.7;
-            drawButton(panelX + cellSize * 0.5, btnY, panelW - cellSize, btnH, '🎮 More Games', '#4caf50');
-            drawButton(panelX + cellSize * 0.5, btnY + btnH * 1.1, panelW - cellSize, btnH, '⚙️ More Settings', '#4caf50');
-            drawButton(panelX + cellSize * 0.5, btnY + btnH * 2.2, panelW - cellSize, btnH, '🔄 Replay', '#4caf50');
+
+            ctx.fillText('Sound', panelX + cellSize * 0.8, toggleY + cellSize * 0.3);
+            drawToggle(panelX + panelW - cellSize * 1.8, toggleY + cellSize * 0.1, cellSize * 0.7, soundOn);
+
+            ctx.fillText('BGM', panelX + cellSize * 0.8, toggleY + spacing + cellSize * 0.3);
+            drawToggle(panelX + panelW - cellSize * 1.8, toggleY + spacing + cellSize * 0.1, cellSize * 0.7, bgmOn);
+
+            ctx.fillText('Skin', panelX + cellSize * 0.8, toggleY + spacing * 2 + cellSize * 0.3);
+            drawToggle(panelX + panelW - cellSize * 1.8, toggleY + spacing * 2 + cellSize * 0.1, cellSize * 0.7, skinOn);
+
+            const btnY = toggleY + spacing * 3.2;
+            const btnH = cellSize * 0.9;
+            drawButton(panelX + cellSize * 0.8, btnY, panelW - cellSize * 1.6, btnH, '🎮 More Games', '#4caf50');
+            drawButton(panelX + cellSize * 0.8, btnY + btnH + 12, panelW - cellSize * 1.6, btnH, '⚙️ More Settings', '#4caf50');
+            drawButton(panelX + cellSize * 0.8, btnY + (btnH + 12) * 2, panelW - cellSize * 1.6, btnH, '🏠 Home', '#2196f3');
+            drawButton(panelX + cellSize * 0.8, btnY + (btnH + 12) * 3, panelW - cellSize * 1.6, btnH, '🔄 Replay', '#ff9800');
         }
 
         function drawToggle(x, y, size, on) {
             roundRect(x, y, size * 1.8, size, size / 2);
-            ctx.fillStyle = on ? '#4caf50' : '#808080';
+            ctx.fillStyle = on ? '#4caf50' : '#757575';
             ctx.fill();
             const knobR = size * 0.45;
             ctx.fillStyle = '#fff';
             ctx.beginPath();
-            ctx.arc(on ? x + size * 1.4 : x + size * 0.4, y + size / 2, knobR, 0, Math.PI * 2);
+            ctx.arc(on ? x + size * 1.35 : x + size * 0.45, y + size / 2, knobR, 0, Math.PI * 2);
             ctx.fill();
         }
 
@@ -372,14 +397,14 @@
             ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.fillStyle = '#ffd700';
-            ctx.font = `${cellSize}px Arial`;
+            ctx.font = `${cellSize * 1.2}px Arial Black`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(score > highScore ? 'Best Score!' : 'Game Over', canvas.width / 2, canvas.height / 2 - cellSize);
             ctx.fillStyle = '#fff';
-            ctx.font = `${cellSize * 1.5}px Arial`;
-            ctx.fillText(`${score}`, canvas.width / 2, canvas.height / 2 + cellSize * 0.5);
-            drawButton(canvas.width / 2 - cellSize * 1.5, canvas.height / 2 + cellSize * 2, cellSize * 3, cellSize, '▶ Play', '#ff8c00');
+            ctx.font = `${cellSize * 1.8}px Arial`;
+            ctx.fillText(`${score}`, canvas.width / 2, canvas.height / 2 + cellSize * 0.3);
+            drawButton(canvas.width / 2 - cellSize * 2, canvas.height / 2 + cellSize * 2, cellSize * 4, cellSize * 1.1, '▶ Play Again', '#ff5722');
         }
 
         function addScorePopup(amount, x, y, color = '#ffcc00') {
@@ -387,14 +412,14 @@
         }
 
         function addComboPopup(text, x, y) {
-            comboPopups.push({ text, x, y, life: 1 });
+            comboPopups.push({ text, x, y, life: 1.2 }); // thoda zyada time dikhe
         }
 
         // Particles
-        function emitParticles(centerX, centerY, color, num = 12) {
+        function emitParticles(centerX, centerY, color, num = 16) {
             for (let i = 0; i < num; i++) {
                 const angle = Math.random() * Math.PI * 2;
-                const speed = 4 + Math.random() * 4;
+                const speed = 5 + Math.random() * 5;
                 particles.push({
                     x: centerX,
                     y: centerY,
@@ -402,7 +427,7 @@
                     vy: Math.sin(angle) * speed,
                     color,
                     life: 1.0,
-                    size: 4 + Math.random() * 6
+                    size: 5 + Math.random() * 7
                 });
             }
         }
@@ -432,6 +457,7 @@
             }
             const clearedCount = fullRows.length + fullCols.length;
             if (clearedCount === 0) return 0;
+
             fullRows.forEach(r => {
                 for (let c = 0; c < GRID_SIZE; c++) emitParticles(gridLeft + c * cellSize + cellSize / 2, gridTop + r * cellSize + cellSize / 2, grid[r][c]);
             });
@@ -439,6 +465,7 @@
                 for (let r = 0; r < GRID_SIZE; r++) if (!fullRows.includes(r)) emitParticles(gridLeft + c * cellSize + cellSize / 2, gridTop + r * cellSize + cellSize / 2, grid[r][c]);
             });
             playClearSound(clearedCount);
+
             let comboText = '';
             if (clearedCount === 2) {
                 comboText = 'Good!';
@@ -451,8 +478,9 @@
                 speak('Best');
             }
             if (comboText) {
-                addComboPopup(comboText, canvas.width / 2, gridTop + GRID_SIZE * cellSize / 2 + cellSize);
+                addComboPopup(comboText, canvas.width / 2, gridTop + GRID_SIZE * cellSize / 2);
             }
+
             fullRows.forEach(r => grid[r].fill(null));
             fullCols.forEach(c => { for (let r = 0; r < GRID_SIZE; r++) grid[r][c] = null; });
             return clearedCount;
@@ -496,49 +524,52 @@
             e.preventDefault();
             const pos = getPos(e);
             if (gameOver) {
-                if (pos.x > canvas.width / 2 - cellSize * 1.5 && pos.x < canvas.width / 2 + cellSize * 1.5 &&
-                    pos.y > canvas.height / 2 + cellSize * 2 && pos.y < canvas.height / 2 + cellSize * 3) {
+                if (pos.x > canvas.width / 2 - cellSize * 2 && pos.x < canvas.width / 2 + cellSize * 2 &&
+                    pos.y > canvas.height / 2 + cellSize * 1.5 && pos.y < canvas.height / 2 + cellSize * 2.8) {
                     restart();
                 }
                 return;
             }
             if (settingsOpen) {
-                const panelW = Math.min(canvas.width * 0.75, 400);
+                const panelW = Math.min(360, canvas.width * 0.82);
                 const panelX = (canvas.width - panelW) / 2;
-                const panelY = (canvas.height - canvas.height * 0.5) / 2 - cellSize;
-                if (pos.x > panelX + panelW - cellSize && pos.y < panelY + cellSize) {
+                const panelY = (canvas.height - Math.min(480, canvas.height * 0.70)) / 2;
+                if (pos.x > panelX + panelW - cellSize && pos.y < panelY + cellSize * 1.2) {
                     settingsOpen = false;
                 }
-                const toggleY = panelY + cellSize;
-                const toggleSize = cellSize * 0.5;
-                if (pos.x > panelX + panelW - cellSize * 2 && pos.x < panelX + panelW - cellSize * 0.5) {
-                    if (pos.y > toggleY && pos.y < toggleY + cellSize * 0.5) {
+                const toggleY = panelY + cellSize * 1.8;
+                const spacing = cellSize * 1.1;
+                const toggleSize = cellSize * 0.7;
+                if (pos.x > panelX + panelW - cellSize * 2.2 && pos.x < panelX + panelW - cellSize * 0.4) {
+                    if (pos.y > toggleY - toggleSize / 2 && pos.y < toggleY + toggleSize / 2) {
                         soundOn = !soundOn;
                         localStorage.setItem('soundOn', soundOn);
-                    } else if (pos.y > toggleY + cellSize * 0.5 && pos.y < toggleY + cellSize) {
+                    } else if (pos.y > toggleY + spacing - toggleSize / 2 && pos.y < toggleY + spacing + toggleSize / 2) {
                         bgmOn = !bgmOn;
                         localStorage.setItem('bgmOn', bgmOn);
                         if (bgmOn) playBGM(); else stopBGM();
-                    } else if (pos.y > toggleY + cellSize && pos.y < toggleY + cellSize * 1.5) {
+                    } else if (pos.y > toggleY + spacing * 2 - toggleSize / 2 && pos.y < toggleY + spacing * 2 + toggleSize / 2) {
                         skinOn = !skinOn;
                         localStorage.setItem('skinOn', skinOn);
                         applySkin();
                         pieces.forEach(p => p.color = COLORS[Math.floor(Math.random() * COLORS.length)]);
                     }
                 }
-                const btnY = toggleY + cellSize * 1.8;
-                const btnH = cellSize * 0.7;
+                const btnY = toggleY + spacing * 3.2;
+                const btnH = cellSize * 0.9;
                 if (pos.y > btnY && pos.y < btnY + btnH) {
                     alert('More Games');
-                } else if (pos.y > btnY + btnH * 1.1 && pos.y < btnY + btnH * 2.1) {
+                } else if (pos.y > btnY + btnH + 12 && pos.y < btnY + (btnH + 12) * 2) {
                     alert('More Settings');
-                } else if (pos.y > btnY + btnH * 2.2 && pos.y < btnY + btnH * 3.2) {
+                } else if (pos.y > btnY + (btnH + 12) * 2 && pos.y < btnY + (btnH + 12) * 3) {
+                    window.location.href = '/'; // Home
+                } else if (pos.y > btnY + (btnH + 12) * 3 && pos.y < btnY + (btnH + 12) * 4) {
                     restart();
                     settingsOpen = false;
                 }
                 return;
             }
-            if (pos.x > canvas.width - cellSize * 1.5 && pos.y < cellSize * 1.5) {
+            if (pos.x > canvas.width - cellSize * 1.8 && pos.y < cellSize * 1.8) {
                 settingsOpen = true;
                 return;
             }
@@ -573,16 +604,16 @@
                 placePiece(dragging, candidateRow, candidateCol);
                 playPlaceSound();
                 const cleared = clearLines();
-                const pieceScore = dragging.shape.length * 15;
-                let clearScore = cleared * 80 * cleared;
+                const pieceScore = dragging.shape.length * 20; // thoda zyada score feel
+                let clearScore = cleared * 100 * cleared;
                 let bonus = 0;
                 if (cleared >= 2) {
-                    bonus = (cleared - 1) * 100 * cleared;
-                    addScorePopup(bonus, gridLeft + GRID_SIZE * cellSize / 2, gridTop + GRID_SIZE * cellSize / 2 + cellSize, '#00ff00');
+                    bonus = (cleared - 1) * 150 * cleared;
+                    addScorePopup(bonus, gridLeft + GRID_SIZE * cellSize / 2, gridTop + GRID_SIZE * cellSize / 2 + cellSize * 0.5, '#00ff88');
                 }
                 const totalAdded = pieceScore + clearScore + bonus;
                 score += totalAdded;
-                addScorePopup(pieceScore + clearScore, gridLeft + GRID_SIZE * cellSize / 2, gridTop + GRID_SIZE * cellSize / 2);
+                addScorePopup(totalAdded, gridLeft + GRID_SIZE * cellSize / 2, gridTop + GRID_SIZE * cellSize / 2);
                 if (score > highScore) {
                     highScore = score;
                     localStorage.setItem('highScore', highScore);
@@ -613,13 +644,14 @@
             const dt = (time - lastTime) / 1000;
             lastTime = time;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+
             particles = particles.filter(p => {
                 p.x += p.vx * 60 * dt;
                 p.y += p.vy * 60 * dt;
-                p.vy += 30 * dt;
-                p.life -= 2 * dt;
+                p.vy += 35 * dt;
+                p.life -= 2.2 * dt;
                 if (p.life > 0) {
-                    ctx.globalAlpha = p.life;
+                    ctx.globalAlpha = p.life * 0.9;
                     ctx.fillStyle = p.color;
                     ctx.beginPath();
                     ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
@@ -629,13 +661,14 @@
                 }
                 return false;
             });
+
             scorePopups = scorePopups.filter(sp => {
-                sp.y -= 50 * dt;
+                sp.y -= 60 * dt;
                 sp.life -= dt;
                 if (sp.life > 0) {
                     ctx.globalAlpha = sp.life;
-                    ctx.fillStyle = sp.color || '#ffcc00';
-                    ctx.font = `${cellSize * 0.6}px Arial`;
+                    ctx.fillStyle = sp.color || '#ffea00';
+                    ctx.font = `${cellSize * 0.7}px Arial Black`;
                     ctx.textAlign = 'center';
                     ctx.fillText(`+${sp.amount}`, sp.x, sp.y);
                     ctx.globalAlpha = 1;
@@ -643,13 +676,14 @@
                 }
                 return false;
             });
+
             comboPopups = comboPopups.filter(cp => {
-                cp.y -= 30 * dt;
-                cp.life -= 0.8 * dt;
+                cp.y -= 40 * dt;
+                cp.life -= 0.9 * dt;
                 if (cp.life > 0) {
                     ctx.globalAlpha = cp.life;
-                    ctx.fillStyle = '#ff4500';
-                    ctx.font = `${cellSize * 0.8}px Arial Black`;
+                    ctx.fillStyle = '#ff5722';
+                    ctx.font = `${cellSize * 1.0}px Arial Black`;
                     ctx.textAlign = 'center';
                     ctx.fillText(cp.text, cp.x, cp.y);
                     ctx.globalAlpha = 1;
@@ -657,16 +691,26 @@
                 }
                 return false;
             });
+
             drawGrid();
             drawPlaced();
             drawPieces();
             if (dragging) {
                 const valid = canPlace(dragging, candidateRow, candidateCol);
-                drawPiece(dragging, gridLeft + candidateCol * cellSize, gridTop + candidateRow * cellSize, 1, valid ? 1 : 0.5, true);
+                drawPiece(dragging, gridLeft + candidateCol * cellSize, gridTop + candidateRow * cellSize, 1, valid ? 1 : 0.6, true);
             }
             drawUI();
             drawSettings();
             drawGameOver();
+
+            // Fake footer ad space (blue bar)
+            ctx.fillStyle = 'rgba(0, 0, 50, 0.7)';
+            ctx.fillRect(0, canvas.height - 70, canvas.width, 70);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '16px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Sponsored • CoinDCX – Bigger Market', canvas.width / 2, canvas.height - 40);
+
             requestAnimationFrame(animate);
         }
 
