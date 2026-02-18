@@ -3,50 +3,86 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Element Blocks Puzzle</title>
+    <title>Element Blocks Puzzle - Pro</title>
     <style>
         body {
             margin: 0;
             overflow: hidden;
-            background: linear-gradient(135deg, #1a237e, #0d47a1);
+            background: #20337a; /* Matches the dark blue background in image */
             display: flex;
-            justify-content: center;
+            flex-direction: column;
+            justify-content: space-between;
             align-items: center;
-            font-family: 'Arial Black', Arial, sans-serif;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             touch-action: none;
+            height: 100vh;
         }
         #canvas {
             display: block;
-            box-shadow: 0 0 30px rgba(0,0,0,0.5);
+            touch-action: none;
+        }
+        /* Footer Ad Placeholder as requested */
+        .ad-footer {
+            width: 100%;
+            height: 60px;
+            background: #ffffff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #000;
+            font-size: 12px;
+            font-weight: bold;
+            border-top: 2px solid #ccc;
+        }
+        .ad-content {
+            width: 100%;
+            max-width: 400px;
+            height: 50px;
+            background: #eee;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 10px;
         }
     </style>
 </head>
 <body>
     <canvas id="canvas"></canvas>
+    
+    <div class="ad-footer">
+        <div class="ad-content">
+            <span>CoinDCX - Same Greeks. Bigger Market.</span>
+            <span style="background: #ff5722; color: white; padding: 4px 8px; border-radius: 4px;">Download Now</span>
+        </div>
+    </div>
+
     <script>
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
 
-        // 1. GRID SIZE 8×8 (fix kiya – pehle 10 tha)
-        const GRID_SIZE = 8;
-
-        // Vibrant + attractive colors (image jaisa look)
-        let COLORS = [
-            '#FF6B35', '#00D4FF', '#39FF14', '#D000FF', '#4169E1',
-            '#FFD700', '#FF69B4', '#FF1493', '#00FF7F', '#FFA500'
-        ];
+        // Configuration
+        const GRID_SIZE = 8; // Changed to 8x8 per your request
+        const COLORS = {
+            blue: '#2196f3',
+            red: '#f44336',
+            yellow: '#ffeb3b',
+            empty: '#0f1b44'
+        };
 
         const SHAPES = [
-            [[0,0]],
-            [[0,0],[1,0]], [[0,0],[0,1]],
-            [[0,0],[1,0],[2,0]], [[0,0],[0,1],[0,2]], [[0,0],[1,0],[0,1]], [[0,0],[1,0],[1,1]], [[0,0],[0,1],[1,1]], [[0,0],[1,0],[2,0],[1,1]],
-            [[0,0],[1,0],[2,0],[3,0]], [[0,0],[0,1],[0,2],[0,3]], [[0,0],[1,0],[2,0],[3,0],[1,1]],
-            [[0,0],[0,1],[1,0],[1,1]],
-            [[0,0],[1,0],[1,1],[2,1]], [[0,0],[0,1],[1,1],[1,2]],
-            [[0,0],[1,0],[2,0],[0,1]], [[0,0],[1,0],[2,0],[2,1]], [[0,0],[1,0],[2,0],[1,1]],
-            [[0,0],[0,1],[0,2],[1,1]], [[0,0],[1,0],[1,1],[1,2]]
+            { shape: [[0,0]], color: COLORS.yellow },
+            { shape: [[0,0],[1,0],[0,1],[1,1]], color: COLORS.blue },
+            { shape: [[0,0],[1,0],[2,0]], color: COLORS.red },
+            { shape: [[0,0],[0,1],[0,2]], color: COLORS.blue },
+            { shape: [[0,0],[1,0],[2,0],[1,1]], color: COLORS.red },
+            { shape: [[0,0],[1,0],[2,0],[0,1]], color: COLORS.yellow },
+            { shape: [[0,0],[0,1],[1,1]], color: COLORS.blue },
+            { shape: [[0,0],[1,0],[2,0],[3,0]], color: COLORS.red },
+            { shape: [[0,0],[0,1],[0,2],[0,3]], color: COLORS.blue }
         ];
 
+        // Game State
         let grid = Array.from({length: GRID_SIZE}, () => Array(GRID_SIZE).fill(null));
         let pieces = [];
         let score = 0;
@@ -56,157 +92,66 @@
         let candidateRow = -1, candidateCol = -1;
         let gameOver = false;
         let settingsOpen = false;
-        let soundOn = localStorage.getItem('soundOn') !== 'false';
-        let bgmOn = localStorage.getItem('bgmOn') !== 'false';
-        let skinOn = localStorage.getItem('skinOn') === 'true';
-        let particles = [];
-        let scorePopups = [];
-        let comboPopups = [];
+        let soundOn = true;
+        let bgmOn = false;
 
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        let bgmOscillator = null;
-        let bgmGainNode = null;
-        const NOTES = {
-            C4: 261.63, D4: 293.66, E4: 329.63, F4: 349.23, G4: 392.00, A4: 440.00, B4: 493.88,
-            C5: 523.25, D5: 587.33, E5: 659.25, F5: 698.46, G5: 783.99, A5: 880.00, B5: 987.77, C6: 1046.50
-        };
-
-        const speechSynth = window.speechSynthesis;
-
-        function speak(text) {
-            if (!soundOn) return;
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.volume = 0.9;
-            utterance.rate = 0.75;     // bahut slow & clear
-            utterance.pitch = 1.05;
-            speechSynth.speak(utterance);
-        }
-
-        function playSound(freq, duration = 0.1, type = 'sine', volume = 0.2) {
-            if (!soundOn) return;
-            try {
-                const now = audioCtx.currentTime;
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
-                osc.frequency.setValueAtTime(freq, now);
-                osc.type = type;
-                gain.gain.setValueAtTime(volume, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + duration);
-                osc.start(now);
-                osc.stop(now + duration);
-            } catch (e) {}
-        }
-
-        function playClearSound(count) {
-            playSound(NOTES.C6 + count * 80, 0.45 + count * 0.18, 'triangle', 0.55);
-        }
-
-        // Resize – Grid niche shift + niche gap kam + score overwrite fix
         let cellSize, gridLeft, gridTop, bottomTop;
+
         function resize() {
             canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
+            canvas.height = window.innerHeight - 60; // Leave space for ad
 
-            cellSize = Math.floor(Math.min(
-                canvas.width / (GRID_SIZE + 3.5),
-                canvas.height * 0.56 / GRID_SIZE   // niche shift ke liye height adjust
-            ));
-
-            gridLeft = Math.max(10, (canvas.width - GRID_SIZE * cellSize) / 2);
-            gridTop = cellSize * 3.2;               // GRID KO AUR NICHE KIYA – upar space zyada
-            bottomTop = gridTop + GRID_SIZE * cellSize + cellSize * 1.4; // niche ads ke liye space
+            cellSize = Math.floor(Math.min(canvas.width * 0.9 / GRID_SIZE, canvas.height * 0.5 / GRID_SIZE));
+            gridLeft = (canvas.width - GRID_SIZE * cellSize) / 2;
+            // Shifted grid down as requested
+            gridTop = canvas.height * 0.25; 
+            bottomTop = gridTop + GRID_SIZE * cellSize + 40;
         }
+
         window.addEventListener('resize', resize);
         resize();
 
         function generatePiece() {
-            const shapeIdx = Math.floor(Math.random() * SHAPES.length);
-            const shape = SHAPES[shapeIdx].map(([x, y]) => [x, y]);
-            const colorIdx = Math.floor(Math.random() * COLORS.length);
-            const color = COLORS[colorIdx];
-            const w = Math.max(...shape.map(p => p[0])) + 1;
-            const h = Math.max(...shape.map(p => p[1])) + 1;
-            return { shape, color, w, h };
+            const proto = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+            const w = Math.max(...proto.shape.map(p => p[0])) + 1;
+            const h = Math.max(...proto.shape.map(p => p[1])) + 1;
+            return { ...proto, w, h };
         }
 
         function initPieces() {
             pieces = [generatePiece(), generatePiece(), generatePiece()];
         }
 
-        function applySkin() {
-            if (skinOn) {
-                COLORS = ['#ff4500', '#1e90ff', '#228b22', '#8a2be2', '#0000cd', '#f4a460', '#ff1493', '#00fa9a', '#b8860b', '#dc143c'];
-            } else {
-                COLORS = ['#FF6B35', '#00D4FF', '#39FF14', '#D000FF', '#4169E1', '#FFD700', '#FF69B4', '#FF1493', '#00FF7F', '#FFA500'];
-            }
-        }
-
-        // Tiles – rounded, shine, glow (vibrant look)
-        function lighten(color, percent) {
-            const num = parseInt(color.replace('#', ''), 16);
-            const amt = Math.round(2.55 * percent);
-            let R = (num >> 16) + amt;
-            let G = (num >> 8 & 0x00FF) + amt;
-            let B = (num & 0x0000FF) + amt;
-            R = Math.min(255, Math.max(0, R));
-            G = Math.min(255, Math.max(0, G));
-            B = Math.min(255, Math.max(0, B));
-            return `rgb(${R},${G},${B})`;
-        }
-
-        function darken(color, percent) {
-            return lighten(color, -percent);
-        }
-
-        function drawBlock(x, y, color, size = cellSize, alpha = 1, isDragging = false) {
+        // Draw Block - Glossy look like image
+        function drawBlock(x, y, color, size, alpha = 1) {
             ctx.save();
             ctx.globalAlpha = alpha;
+            
+            // Main body
+            ctx.fillStyle = color;
+            ctx.fillRect(x + 1, y + 1, size - 2, size - 2);
 
-            if (isDragging) {
-                ctx.shadowColor = 'rgba(255,255,255,0.85)';
-                ctx.shadowBlur = 30;
-            }
+            // Inner gloss/border effect
+            ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x + 3, y + 3, size - 6, size - 6);
 
-            const radius = size * 0.22;
-            roundRect(x + 4, y + 4, size - 8, size - 8, radius);
-
-            const grad = ctx.createLinearGradient(x, y, x + size, y + size);
-            grad.addColorStop(0, lighten(color, 55));
-            grad.addColorStop(0.45, color);
-            grad.addColorStop(1, darken(color, 40));
-            ctx.fillStyle = grad;
-            ctx.fill();
-
-            // Shine
-            ctx.fillStyle = 'rgba(255,255,255,0.45)';
-            ctx.beginPath();
-            ctx.arc(x + size*0.3, y + size*0.3, size*0.25, 0, Math.PI*2);
-            ctx.fill();
-
-            // Border
-            ctx.strokeStyle = lighten(color, 85);
-            ctx.lineWidth = 6;
-            ctx.stroke();
-
+            // Darker bottom edge
+            ctx.fillStyle = 'rgba(0,0,0,0.2)';
+            ctx.fillRect(x + 1, y + size - 4, size - 2, 3);
+            
             ctx.restore();
         }
 
-        function drawPiece(piece, px, py, scale = 1, alpha = 1, isDragging = false) {
-            for (const [dx, dy] of piece.shape) {
-                drawBlock(px + dx * cellSize * scale, py + dy * cellSize * scale, piece.color, cellSize * scale, alpha, isDragging);
-            }
-        }
-
         function drawGrid() {
-            ctx.fillStyle = '#0d1b2a';
-            roundRect(gridLeft - 15, gridTop - 15, GRID_SIZE * cellSize + 30, GRID_SIZE * cellSize + 30, 40);
-            ctx.fill();
+            // Grid Background
+            ctx.fillStyle = COLORS.empty;
+            ctx.fillRect(gridLeft - 4, gridTop - 4, GRID_SIZE * cellSize + 8, GRID_SIZE * cellSize + 8);
 
-            ctx.strokeStyle = 'rgba(120, 180, 255, 0.20)';
-            ctx.lineWidth = 2.5;
-            for (let i = 1; i < GRID_SIZE; i++) {
+            // Grid Lines
+            ctx.strokeStyle = '#1a2a5e';
+            ctx.lineWidth = 1;
+            for(let i=0; i<=GRID_SIZE; i++) {
                 ctx.beginPath();
                 ctx.moveTo(gridLeft + i * cellSize, gridTop);
                 ctx.lineTo(gridLeft + i * cellSize, gridTop + GRID_SIZE * cellSize);
@@ -216,174 +161,115 @@
                 ctx.lineTo(gridLeft + GRID_SIZE * cellSize, gridTop + i * cellSize);
                 ctx.stroke();
             }
-        }
 
-        function drawPlaced() {
+            // Placed Blocks
             for (let r = 0; r < GRID_SIZE; r++) {
                 for (let c = 0; c < GRID_SIZE; c++) {
                     if (grid[r][c]) {
-                        drawBlock(gridLeft + c * cellSize, gridTop + r * cellSize, grid[r][c]);
+                        drawBlock(gridLeft + c * cellSize, gridTop + r * cellSize, grid[r][c], cellSize);
                     }
                 }
             }
         }
 
-        function drawPieces() {
-            const slotWidth = canvas.width / 3;
-            const slotHeight = Math.max(120, canvas.height - bottomTop);
-            for (let i = 0; i < pieces.length; i++) {
-                const p = pieces[i];
-                const scaleX = (slotWidth * 0.96) / (p.w * cellSize);
-                const scaleY = (slotHeight * 0.94) / (p.h * cellSize);
-                p.scale = Math.min(scaleX, scaleY, 1.25);
-                p.homeX = i * slotWidth + (slotWidth - p.w * cellSize * p.scale) / 2;
-                p.homeY = bottomTop + (slotHeight - p.h * cellSize * p.scale) / 2;
-                drawPiece(p, p.homeX, p.homeY, p.scale);
-            }
-        }
-
         function drawUI() {
-            ctx.fillStyle = '#ffcc00';
-            ctx.font = `${cellSize * 0.7}px Arial`;
+            // Header: Crown and High Score
+            ctx.fillStyle = '#fbc02d';
+            ctx.font = 'bold 20px Arial';
             ctx.textAlign = 'left';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(`👑 ${highScore}`, cellSize * 0.6, cellSize * 0.9);
+            ctx.fillText(`👑 ${highScore}`, 20, 40);
 
-            ctx.fillStyle = '#ffffff';
-            ctx.font = `${cellSize * 1.15}px Arial Black`; // score chhota rakha
+            // Main Score
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 60px Arial';
             ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(`${score}`, canvas.width / 2, cellSize * 1.05);
+            ctx.fillText(score, canvas.width / 2, 80);
 
-            ctx.fillStyle = '#a0a0a0';
-            ctx.font = `${cellSize * 0.9}px Arial`;
+            // Settings Gear
+            ctx.fillStyle = 'white';
+            ctx.font = '30px Arial';
             ctx.textAlign = 'right';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('⚙️', canvas.width - cellSize * 0.6, cellSize * 0.9);
+            ctx.fillText('⚙️', canvas.width - 20, 45);
         }
 
-        function roundRect(x, y, w, h, r) {
-            if (w < 2 * r) r = w / 2;
-            if (h < 2 * r) r = h / 2;
-            ctx.beginPath();
-            ctx.moveTo(x + r, y);
-            ctx.arcTo(x + w, y, x + w, y + h, r);
-            ctx.arcTo(x + w, y + h, x, y + h, r);
-            ctx.arcTo(x, y + h, x, y, r);
-            ctx.arcTo(x, y, x + w, y, r);
-            ctx.closePath();
+        function drawPieces() {
+            const slotW = canvas.width / 3;
+            pieces.forEach((p, i) => {
+                const scale = 0.7;
+                p.homeX = i * slotW + (slotW - p.w * cellSize * scale) / 2;
+                p.homeY = bottomTop;
+                
+                p.shape.forEach(([dx, dy]) => {
+                    drawBlock(p.homeX + dx * cellSize * scale, p.homeY + dy * cellSize * scale, p.color, cellSize * scale);
+                });
+            });
         }
 
-        function drawButton(x, y, w, h, text, bgColor, fgColor = '#fff') {
-            roundRect(x, y, w, h, h * 0.3);
-            ctx.fillStyle = bgColor;
-            ctx.fill();
-            ctx.fillStyle = fgColor;
-            ctx.font = `${h * 0.45}px Arial`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(text, x + w / 2, y + h / 2);
-        }
-
-        // Settings – vertical jaise image mein
         function drawSettings() {
             if (!settingsOpen) return;
-            const panelW = Math.min(400, canvas.width * 0.88);
-            const panelH = Math.min(560, canvas.height * 0.75);
-            const panelX = (canvas.width - panelW) / 2;
-            const panelY = (canvas.height - panelH) / 2;
 
-            roundRect(panelX, panelY, panelW, panelH, 32);
-            const grad = ctx.createLinearGradient(panelX, panelY, panelX, panelY + panelH);
-            grad.addColorStop(0, '#1e40af');
-            grad.addColorStop(1, '#0f2b5e');
-            ctx.fillStyle = grad;
-            ctx.fill();
-            ctx.strokeStyle = '#60a5fa';
-            ctx.lineWidth = 6;
-            ctx.stroke();
-
-            ctx.fillStyle = '#ffffff';
-            ctx.font = `${cellSize * 1.1}px Arial Black`;
-            ctx.textAlign = 'center';
-            ctx.fillText('Settings', panelX + panelW / 2, panelY + cellSize * 1.3);
-
-            ctx.font = `${cellSize * 0.8}px Arial`;
-            ctx.textAlign = 'right';
-            ctx.fillText('×', panelX + panelW - cellSize * 0.6, panelY + cellSize * 1.1);
-
-            const toggleY = panelY + cellSize * 2.4;
-            const spacing = cellSize * 1.4;
-            ctx.font = `${cellSize * 0.7}px Arial`;
-            ctx.textAlign = 'left';
-
-            ctx.fillText('Sound', panelX + cellSize * 1.2, toggleY + cellSize * 0.45);
-            drawToggle(panelX + panelW - cellSize * 2.2, toggleY + cellSize * 0.2, cellSize * 0.9, soundOn);
-
-            ctx.fillText('BGM', panelX + cellSize * 1.2, toggleY + spacing + cellSize * 0.45);
-            drawToggle(panelX + panelW - cellSize * 2.2, toggleY + spacing + cellSize * 0.2, cellSize * 0.9, bgmOn);
-
-            ctx.fillText('Skin', panelX + cellSize * 1.2, toggleY + spacing * 2 + cellSize * 0.45);
-            drawToggle(panelX + panelW - cellSize * 2.2, toggleY + spacing * 2 + cellSize * 0.2, cellSize * 0.9, skinOn);
-
-            const btnY = toggleY + spacing * 3.8;
-            const btnH = cellSize * 1.1;
-            drawButton(panelX + cellSize * 1.2, btnY, panelW - cellSize * 2.4, btnH, '🎮 More Games', '#22c55e');
-            drawButton(panelX + cellSize * 1.2, btnY + btnH + 16, panelW - cellSize * 2.4, btnH, '⚙️ More Settings', '#eab308');
-            drawButton(panelX + cellSize * 1.2, btnY + (btnH + 16) * 2, panelW - cellSize * 2.4, btnH, '🏠 Home', '#3b82f6');
-            drawButton(panelX + cellSize * 1.2, btnY + (btnH + 16) * 3, panelW - cellSize * 2.4, btnH, '🔄 Replay', '#f97316');
-        }
-
-        function drawToggle(x, y, size, on) {
-            roundRect(x, y, size * 1.9, size, size / 2);
-            ctx.fillStyle = on ? '#22c55e' : '#6b7280';
-            ctx.fill();
-            const knobR = size * 0.48;
-            ctx.fillStyle = '#ffffff';
-            ctx.beginPath();
-            ctx.arc(on ? x + size * 1.42 : x + size * 0.48, y + size / 2, knobR, 0, Math.PI * 2);
-            ctx.fill();
-        }
-
-        function drawGameOver() {
-            if (!gameOver) return;
-            ctx.fillStyle = 'rgba(0,0,0,0.85)';
+            // Overlay
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = '#ffd700';
-            ctx.font = `${cellSize * 1.4}px Arial Black`;
+
+            // Vertical Panel (Matches Image 1)
+            const w = 300;
+            const h = 450;
+            const x = (canvas.width - w) / 2;
+            const y = (canvas.height - h) / 2;
+
+            // Box
+            ctx.fillStyle = '#4a69bd';
+            ctx.roundRect ? ctx.roundRect(x, y, w, h, 15) : ctx.fillRect(x, y, w, h);
+            ctx.fill();
+
+            // Header
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 24px Arial';
             ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(score > highScore ? 'Best Score!' : 'Game Over', canvas.width / 2, canvas.height / 2 - cellSize);
-            ctx.fillStyle = '#ffffff';
-            ctx.font = `${cellSize * 2.2}px Arial`;
-            ctx.fillText(`${score}`, canvas.width / 2, canvas.height / 2 + cellSize * 0.5);
-            drawButton(canvas.width / 2 - cellSize * 2.4, canvas.height / 2 + cellSize * 2.4, cellSize * 4.8, cellSize * 1.3, '▶ Play Again', '#ef4444');
+            ctx.fillText('Settings', x + w/2, y + 40);
+            ctx.fillText('✕', x + w - 30, y + 40);
+
+            // Top Buttons (Sound, BGM, Skin)
+            const iconY = y + 80;
+            drawSettingIcon(x + 60, iconY, '🔊', 'Sound', soundOn);
+            drawSettingIcon(x + 150, iconY, '🎵', 'BGM', bgmOn);
+            drawSettingIcon(x + 240, iconY, '👕', 'Skin', true);
+
+            // List Buttons (Green Buttons like image)
+            const btnW = 240;
+            const btnH = 50;
+            const btnX = x + (w - btnW) / 2;
+            
+            drawListButton(btnX, y + 180, btnW, btnH, '🎮 More Games', '#44bd32');
+            drawListButton(btnX, y + 245, btnW, btnH, '⚙️ More Settings', '#44bd32');
+            drawListButton(btnX, y + 310, btnW, btnH, '🏠 Home', '#44bd32');
+            drawListButton(btnX, y + 375, btnW, btnH, '🔄 Replay', '#44bd32');
         }
 
-        function addScorePopup(amount, x, y, color = '#ffea00') {
-            scorePopups.push({ amount, x, y, life: 1.5, color });
-        }
-
-        function addComboPopup(text, x, y) {
-            comboPopups.push({ text, x, y, life: 1.8 });
-        }
-
-        function emitParticles(centerX, centerY, color, num = 40) {
-            for (let i = 0; i < num; i++) {
-                const angle = Math.random() * Math.PI * 2;
-                const speed = 8 + Math.random() * 10;
-                particles.push({
-                    x: centerX,
-                    y: centerY,
-                    vx: Math.cos(angle) * speed,
-                    vy: Math.sin(angle) * speed,
-                    color,
-                    life: 1.0,
-                    size: 8 + Math.random() * 12
-                });
+        function drawSettingIcon(x, y, icon, label, active) {
+            ctx.font = '30px Arial';
+            ctx.fillText(icon, x, y);
+            if (!active) {
+                ctx.strokeStyle = 'red';
+                ctx.lineWidth = 3;
+                ctx.beginPath(); ctx.moveTo(x-15, y-15); ctx.lineTo(x+15, y+15); ctx.stroke();
             }
+            ctx.font = '14px Arial';
+            ctx.fillText(label, x, y + 30);
         }
 
+        function drawListButton(x, y, w, h, text, color) {
+            ctx.fillStyle = color;
+            ctx.roundRect ? ctx.roundRect(x, y, w, h, 10) : ctx.fillRect(x, y, w, h);
+            ctx.fill();
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 18px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(text, x + w/2, y + h/2 + 6);
+        }
+
+        // Logic
         function canPlace(piece, row, col) {
             if (row < 0 || col < 0 || row + piece.h > GRID_SIZE || col + piece.w > GRID_SIZE) return false;
             for (const [dx, dy] of piece.shape) {
@@ -392,280 +278,146 @@
             return true;
         }
 
-        function placePiece(piece, row, col) {
-            for (const [dx, dy] of piece.shape) {
-                grid[row + dy][col + dx] = piece.color;
-            }
-        }
+        function checkLines() {
+            let linesCleared = 0;
+            let rowsToClear = [];
+            let colsToClear = [];
 
-        function clearLines() {
-            const fullRows = [], fullCols = [];
+            // Rows
             for (let r = 0; r < GRID_SIZE; r++) {
-                if (grid[r].every(cell => cell !== null)) fullRows.push(r);
+                if (grid[r].every(c => c !== null)) rowsToClear.push(r);
             }
+            // Cols
             for (let c = 0; c < GRID_SIZE; c++) {
-                if (Array.from({length: GRID_SIZE}, (_, r) => grid[r][c]).every(cell => cell !== null)) fullCols.push(c);
-            }
-            const clearedCount = fullRows.length + fullCols.length;
-            if (clearedCount === 0) return 0;
-
-            // Particles dramatic
-            fullRows.forEach(r => {
-                for (let c = 0; c < GRID_SIZE; c++) emitParticles(gridLeft + c * cellSize + cellSize / 2, gridTop + r * cellSize + cellSize / 2, grid[r][c]);
-            });
-            fullCols.forEach(c => {
-                for (let r = 0; r < GRID_SIZE; r++) if (!fullRows.includes(r)) emitParticles(gridLeft + c * cellSize + cellSize / 2, gridTop + r * cellSize + cellSize / 2, grid[r][c]);
-            });
-
-            playClearSound(clearedCount);
-
-            let comboText = '';
-            if (clearedCount === 2) comboText = 'Good!';
-            else if (clearedCount === 3) comboText = 'Better!';
-            else if (clearedCount >= 4) comboText = 'Best!';
-
-            if (comboText) {
-                addComboPopup(comboText, canvas.width / 2, gridTop + GRID_SIZE * cellSize / 2);
-                speak(comboText);
+                let full = true;
+                for (let r = 0; r < GRID_SIZE; r++) if (grid[r][c] === null) full = false;
+                if (full) colsToClear.push(c);
             }
 
-            fullRows.forEach(r => grid[r].fill(null));
-            fullCols.forEach(c => { for (let r = 0; r < GRID_SIZE; r++) grid[r][c] = null; });
+            rowsToClear.forEach(r => grid[r].fill(null));
+            colsToClear.forEach(c => { for (let r = 0; r < GRID_SIZE; r++) grid[r][c] = null; });
 
-            return clearedCount;
+            linesCleared = rowsToClear.length + colsToClear.length;
+            
+            // SCORE ONLY INCREASES ON LINE CLEAR
+            if (linesCleared > 0) {
+                score += (linesCleared * 100); 
+                if (score > highScore) {
+                    highScore = score;
+                    localStorage.setItem('highScore', highScore);
+                }
+            }
         }
 
-        function canPlaceAny() {
+        function isGameOver() {
             for (const p of pieces) {
                 for (let r = 0; r <= GRID_SIZE - p.h; r++) {
                     for (let c = 0; c <= GRID_SIZE - p.w; c++) {
-                        if (canPlace(p, r, c)) return true;
+                        if (canPlace(p, r, c)) return false;
                     }
                 }
             }
-            return false;
+            return true;
         }
 
-        function restart() {
-            grid = Array.from({length: GRID_SIZE}, () => Array(GRID_SIZE).fill(null));
-            pieces = [];
-            score = 0;
-            particles = [];
-            scorePopups = [];
-            comboPopups = [];
-            gameOver = false;
-            settingsOpen = false;
-            initPieces();
-            stopBGM();
-            playStartTune();
-            if (bgmOn) playBGM();
-            applySkin();
-        }
-
+        // Input Handling
         function getPos(e) {
-            const rect = canvas.getBoundingClientRect();
-            const touch = e.touches ? e.touches[0] : e;
-            return { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
+            const t = e.touches ? e.touches[0] : e;
+            return { x: t.clientX, y: t.clientY };
         }
 
-        function handlePointerDown(e) {
-            e.preventDefault();
+        canvas.addEventListener('pointerdown', e => {
             const pos = getPos(e);
-            if (gameOver) {
-                if (pos.x > canvas.width / 2 - cellSize * 2.4 && pos.x < canvas.width / 2 + cellSize * 2.4 &&
-                    pos.y > canvas.height / 2 + cellSize * 2.2 && pos.y < canvas.height / 2 + cellSize * 3.6) {
-                    restart();
-                }
+            
+            // Settings Toggle
+            if (pos.x > canvas.width - 60 && pos.y < 60) {
+                settingsOpen = !settingsOpen;
                 return;
             }
+
             if (settingsOpen) {
-                const panelW = Math.min(400, canvas.width * 0.88);
-                const panelX = (canvas.width - panelW) / 2;
-                const panelY = (canvas.height - Math.min(560, canvas.height * 0.75)) / 2;
-                if (pos.x > panelX + panelW - cellSize * 1.4 && pos.y < panelY + cellSize * 1.6) {
-                    settingsOpen = false;
-                }
-                const toggleY = panelY + cellSize * 2.4;
-                const spacing = cellSize * 1.4;
-                const toggleSize = cellSize * 0.9;
-                if (pos.x > panelX + panelW - cellSize * 2.6 && pos.x < panelX + panelW - cellSize * 0.8) {
-                    if (pos.y > toggleY && pos.y < toggleY + toggleSize) {
-                        soundOn = !soundOn;
-                        localStorage.setItem('soundOn', soundOn);
-                    } else if (pos.y > toggleY + spacing && pos.y < toggleY + spacing + toggleSize) {
-                        bgmOn = !bgmOn;
-                        localStorage.setItem('bgmOn', bgmOn);
-                        if (bgmOn) playBGM(); else stopBGM();
-                    } else if (pos.y > toggleY + spacing * 2 && pos.y < toggleY + spacing * 2 + toggleSize) {
-                        skinOn = !skinOn;
-                        localStorage.setItem('skinOn', skinOn);
-                        applySkin();
-                        pieces.forEach(p => p.color = COLORS[Math.floor(Math.random() * COLORS.length)]);
-                    }
-                }
-                const btnY = toggleY + spacing * 3.8;
-                const btnH = cellSize * 1.1;
-                if (pos.y > btnY && pos.y < btnY + btnH) alert('More Games');
-                else if (pos.y > btnY + btnH + 16 && pos.y < btnY + (btnH + 16) * 2) alert('More Settings');
-                else if (pos.y > btnY + (btnH + 16) * 2 && pos.y < btnY + (btnH + 16) * 3) window.location.href = '/';
-                else if (pos.y > btnY + (btnH + 16) * 3 && pos.y < btnY + (btnH + 16) * 4) {
-                    restart();
-                    settingsOpen = false;
-                }
+                if (pos.y > (canvas.height/2 + 150)) settingsOpen = false; // Close on bottom click
                 return;
             }
-            if (pos.x > canvas.width - cellSize * 2 && pos.y < cellSize * 2) {
-                settingsOpen = true;
-                return;
-            }
-            for (let i = pieces.length - 1; i >= 0; i--) {
-                const p = pieces[i];
-                const minX = p.homeX;
-                const maxX = minX + p.w * cellSize * p.scale;
-                const minY = p.homeY;
-                const maxY = minY + p.h * cellSize * p.scale;
-                if (pos.x >= minX && pos.x <= maxX && pos.y >= minY && pos.y <= maxY) {
-                    dragging = p;
-                    offsetX = pos.x - minX;
-                    offsetY = pos.y - minY;
-                    pieces.splice(i, 1);
-                    playPickSound();
-                    break;
-                }
-            }
-        }
 
-        function handlePointerMove(e) {
+            // Piece selection
+            const slotW = canvas.width / 3;
+            pieces.forEach((p, i) => {
+                const scale = 0.7;
+                if (pos.x > p.homeX && pos.x < p.homeX + p.w*cellSize*scale && 
+                    pos.y > p.homeY && pos.y < p.homeY + p.h*cellSize*scale) {
+                    dragging = p;
+                    dragging.index = i;
+                    offsetX = pos.x - p.homeX;
+                    offsetY = pos.y - p.homeY;
+                }
+            });
+        });
+
+        canvas.addEventListener('pointermove', e => {
             if (!dragging) return;
             const pos = getPos(e);
-            candidateCol = Math.floor((pos.x - offsetX - gridLeft) / cellSize);
-            candidateRow = Math.floor((pos.y - offsetY - gridTop) / cellSize);
-        }
+            dragging.curX = pos.x - offsetX;
+            dragging.curY = pos.y - offsetY;
 
-        function handlePointerUp(e) {
+            candidateCol = Math.round((dragging.curX - gridLeft) / cellSize);
+            candidateRow = Math.round((dragging.curY - gridTop) / cellSize);
+        });
+
+        canvas.addEventListener('pointerup', () => {
             if (!dragging) return;
-            let valid = canPlace(dragging, candidateRow, candidateCol);
-            if (valid) {
-                placePiece(dragging, candidateRow, candidateCol);
-                playPlaceSound();
-                const cleared = clearLines();
-                // === SCORE SIRF LINE CLEAR HONE PAR BADHEGA ===
-                let added = 0;
-                if (cleared > 0) {
-                    const pieceScore = dragging.shape.length * 20;
-                    let clearScore = cleared * 120 * cleared;
-                    let bonus = cleared >= 2 ? (cleared - 1) * 180 * cleared : 0;
-                    added = pieceScore + clearScore + bonus;
-                    score += added;
-                    addScorePopup(added, gridLeft + GRID_SIZE * cellSize / 2, gridTop + GRID_SIZE * cellSize / 2, '#ffea00');
-                    if (bonus > 0) {
-                        addScorePopup(bonus, gridLeft + GRID_SIZE * cellSize / 2, gridTop + GRID_SIZE * cellSize / 2 - cellSize * 0.5, '#00ff88');
-                    }
-                    if (score > highScore) {
-                        highScore = score;
-                        localStorage.setItem('highScore', highScore);
-                    }
-                }
-                pieces.push(generatePiece());
-                if (!canPlaceAny()) {
-                    gameOver = true;
-                    playGameOverTune();
-                }
-            } else {
-                pieces.push(dragging);
-                playInvalidSound();
+
+            if (canPlace(dragging, candidateRow, candidateCol)) {
+                dragging.shape.forEach(([dx, dy]) => {
+                    grid[candidateRow + dy][candidateCol + dx] = dragging.color;
+                });
+                pieces.splice(dragging.index, 1);
+                checkLines();
+                if (pieces.length === 0) initPieces();
+                if (isGameOver()) gameOver = true;
             }
+
             dragging = null;
             candidateRow = -1;
             candidateCol = -1;
-        }
+        });
 
-        canvas.addEventListener('pointerdown', handlePointerDown);
-        canvas.addEventListener('pointermove', handlePointerMove);
-        canvas.addEventListener('pointerup', handlePointerUp);
-        canvas.addEventListener('pointercancel', handlePointerUp);
-
-        let lastTime = 0;
-        function animate(time) {
-            const dt = (time - lastTime) / 1000;
-            lastTime = time;
+        function animate() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            particles = particles.filter(p => {
-                p.x += p.vx * 60 * dt;
-                p.y += p.vy * 60 * dt;
-                p.vy += 45 * dt;
-                p.life -= 2.4 * dt;
-                if (p.life > 0) {
-                    ctx.globalAlpha = p.life * 0.94;
-                    ctx.fillStyle = p.color;
-                    ctx.beginPath();
-                    ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.globalAlpha = 1;
-                    return true;
-                }
-                return false;
-            });
-
-            scorePopups = scorePopups.filter(sp => {
-                sp.y -= 90 * dt;
-                sp.life -= 1.3 * dt;
-                if (sp.life > 0) {
-                    ctx.globalAlpha = sp.life;
-                    ctx.fillStyle = sp.color || '#ffea00';
-                    ctx.font = `${cellSize * (sp.color === '#00ff88' ? 1.1 : 0.75)}px Arial Black`;
-                    ctx.textAlign = 'center';
-                    ctx.fillText(`+${sp.amount}`, sp.x, sp.y);
-                    ctx.globalAlpha = 1;
-                    return true;
-                }
-                return false;
-            });
-
-            comboPopups = comboPopups.filter(cp => {
-                cp.y -= 55 * dt;
-                cp.life -= 0.95 * dt;
-                if (cp.life > 0) {
-                    ctx.globalAlpha = cp.life;
-                    ctx.fillStyle = '#ff5722';
-                    ctx.font = `${cellSize * 1.3}px Arial Black`;
-                    ctx.textAlign = 'center';
-                    ctx.fillText(cp.text, cp.x, cp.y);
-                    ctx.globalAlpha = 1;
-                    return true;
-                }
-                return false;
-            });
-
+            
             drawGrid();
-            drawPlaced();
-            drawPieces();
-            if (dragging) {
-                const valid = canPlace(dragging, candidateRow, candidateCol);
-                drawPiece(dragging, gridLeft + candidateCol * cellSize, gridTop + candidateRow * cellSize, 1, valid ? 1 : 0.6, true);
-            }
             drawUI();
+            drawPieces();
+
+            if (dragging) {
+                const isValid = canPlace(dragging, candidateRow, candidateCol);
+                dragging.shape.forEach(([dx, dy]) => {
+                    const drawX = dragging.curX + dx * cellSize;
+                    const drawY = dragging.curY + dy * cellSize;
+                    drawBlock(drawX, drawY, dragging.color, cellSize, isValid ? 1 : 0.5);
+                });
+            }
+
+            if (gameOver) {
+                ctx.fillStyle = 'rgba(0,0,0,0.8)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 40px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('GAME OVER', canvas.width/2, canvas.height/2);
+                ctx.font = '20px Arial';
+                ctx.fillText('Tap to Restart', canvas.width/2, canvas.height/2 + 50);
+            }
+
             drawSettings();
-            drawGameOver();
-
-            // Niche footer ad – hamesha dikhega
-            ctx.fillStyle = 'rgba(0,0,50,0.85)';
-            ctx.fillRect(0, canvas.height - 100, canvas.width, 100);
-            ctx.fillStyle = '#ffffff';
-            ctx.font = '22px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText('Sponsored • CoinDCX – Bigger Market', canvas.width / 2, canvas.height - 60);
-
             requestAnimationFrame(animate);
         }
 
-        // Init
-        applySkin();
+        canvas.addEventListener('click', () => { if(gameOver) location.reload(); });
+
         initPieces();
-        playStartTune();
-        if (bgmOn) playBGM();
-        requestAnimationFrame(animate);
+        animate();
+
     </script>
 </body>
 </html>
