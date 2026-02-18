@@ -3,25 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Element Blocks Puzzle - Pro</title>
+    <title>Element Blocks Puzzle - 8x8 Edition</title>
     <style>
         body {
             margin: 0;
             overflow: hidden;
-            background: #20337a; /* Matches the dark blue background in image */
+            background: linear-gradient(135deg, #1a237e, #0d47a1);
             display: flex;
             flex-direction: column;
             justify-content: space-between;
             align-items: center;
-            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            font-family: 'Arial Black', Arial, sans-serif;
             touch-action: none;
             height: 100vh;
         }
         #canvas {
             display: block;
-            touch-action: none;
+            box-shadow: 0 0 30px rgba(0,0,0,0.5);
         }
-        /* Footer Ad Placeholder as requested */
+        /* Footer for Ads */
         .ad-footer {
             width: 100%;
             height: 60px;
@@ -29,31 +29,20 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            color: #000;
-            font-size: 12px;
-            font-weight: bold;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            color: #333;
             border-top: 2px solid #ccc;
-        }
-        .ad-content {
-            width: 100%;
-            max-width: 400px;
-            height: 50px;
-            background: #eee;
-            border-radius: 4px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0 10px;
         }
     </style>
 </head>
 <body>
     <canvas id="canvas"></canvas>
-    
+
     <div class="ad-footer">
-        <div class="ad-content">
-            <span>CoinDCX - Same Greeks. Bigger Market.</span>
-            <span style="background: #ff5722; color: white; padding: 4px 8px; border-radius: 4px;">Download Now</span>
+        <div style="display: flex; align-items: center; gap: 10px; width: 90%; max-width: 400px;">
+            <div style="background: #eee; padding: 5px; border-radius: 4px; flex-grow: 1;">CoinDCX - Same Greeks. Bigger Market.</div>
+            <div style="background: #ff5722; color: white; padding: 8px 12px; border-radius: 4px; font-weight: bold; font-size: 12px;">INSTALL</div>
         </div>
     </div>
 
@@ -61,28 +50,21 @@
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
 
-        // Configuration
-        const GRID_SIZE = 8; // Changed to 8x8 per your request
-        const COLORS = {
-            blue: '#2196f3',
-            red: '#f44336',
-            yellow: '#ffeb3b',
-            empty: '#0f1b44'
-        };
-
+        // --- Constants ---
+        const GRID_SIZE = 8; // Changed to 8x8 as requested
+        let COLORS = ['#ff7518', '#00bfff', '#32cd32', '#9932cc', '#4169e1', '#ffd700', '#ff69b4', '#ff1493', '#00ff7f', '#daa520'];
         const SHAPES = [
-            { shape: [[0,0]], color: COLORS.yellow },
-            { shape: [[0,0],[1,0],[0,1],[1,1]], color: COLORS.blue },
-            { shape: [[0,0],[1,0],[2,0]], color: COLORS.red },
-            { shape: [[0,0],[0,1],[0,2]], color: COLORS.blue },
-            { shape: [[0,0],[1,0],[2,0],[1,1]], color: COLORS.red },
-            { shape: [[0,0],[1,0],[2,0],[0,1]], color: COLORS.yellow },
-            { shape: [[0,0],[0,1],[1,1]], color: COLORS.blue },
-            { shape: [[0,0],[1,0],[2,0],[3,0]], color: COLORS.red },
-            { shape: [[0,0],[0,1],[0,2],[0,3]], color: COLORS.blue }
+            [[0,0]],
+            [[0,0],[1,0]], [[0,0],[0,1]],
+            [[0,0],[1,0],[2,0]], [[0,0],[0,1],[0,2]], [[0,0],[1,0],[0,1]], [[0,0],[1,0],[1,1]], [[0,0],[0,1],[1,1]], [[0,0],[1,0],[2,0],[1,1]],
+            [[0,0],[1,0],[2,0],[3,0]], [[0,0],[0,1],[0,2],[0,3]], [[0,0],[1,0],[2,0],[3,0],[1,1]],
+            [[0,0],[0,1],[1,0],[1,1]],
+            [[0,0],[1,0],[1,1],[2,1]], [[0,0],[0,1],[1,1],[1,2]],
+            [[0,0],[1,0],[2,0],[0,1]], [[0,0],[1,0],[2,0],[2,1]], [[0,0],[1,0],[2,0],[1,1]],
+            [[0,0],[0,1],[0,2],[1,1]], [[0,0],[1,0],[1,1],[1,2]]
         ];
 
-        // Game State
+        // --- Game state ---
         let grid = Array.from({length: GRID_SIZE}, () => Array(GRID_SIZE).fill(null));
         let pieces = [];
         let score = 0;
@@ -92,66 +74,111 @@
         let candidateRow = -1, candidateCol = -1;
         let gameOver = false;
         let settingsOpen = false;
-        let soundOn = true;
-        let bgmOn = false;
+        let soundOn = localStorage.getItem('soundOn') !== 'false';
+        let bgmOn = localStorage.getItem('bgmOn') !== 'false';
+        let skinOn = localStorage.getItem('skinOn') === 'true';
+        let particles = [];
+        let scorePopups = [];
+        let comboPopups = [];
 
-        let cellSize, gridLeft, gridTop, bottomTop;
+        // --- Audio Logic ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        let bgmOscillator = null;
+        let bgmGainNode = null;
+        const NOTES = { C4: 261.63, D4: 293.66, E4: 329.63, G4: 392.00, C5: 523.25, E5: 659.25, G5: 783.99, C6: 1046.50 };
 
-        function resize() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight - 60; // Leave space for ad
-
-            cellSize = Math.floor(Math.min(canvas.width * 0.9 / GRID_SIZE, canvas.height * 0.5 / GRID_SIZE));
-            gridLeft = (canvas.width - GRID_SIZE * cellSize) / 2;
-            // Shifted grid down as requested
-            gridTop = canvas.height * 0.25; 
-            bottomTop = gridTop + GRID_SIZE * cellSize + 40;
+        function playSound(freq, duration = 0.1, type = 'sine', volume = 0.2) {
+            if (!soundOn) return;
+            try {
+                const now = audioCtx.currentTime;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.frequency.setValueAtTime(freq, now);
+                osc.type = type;
+                gain.gain.setValueAtTime(volume, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+                osc.start(now); osc.stop(now + duration);
+            } catch (e) {}
         }
 
+        function playClearSound(count) { playSound(NOTES.C6 + count * 50, 0.4, 'triangle', 0.4); }
+
+        // --- Layout ---
+        let cellSize, gridLeft, gridTop, bottomTop;
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight - 60; // Subtract ad height
+
+            const maxPossibleCell = Math.min(
+                canvas.width / (GRID_SIZE + 1),
+                (canvas.height * 0.65) / GRID_SIZE
+            );
+            cellSize = Math.floor(maxPossibleCell);
+            gridLeft = (canvas.width - GRID_SIZE * cellSize) / 2;
+            // Shifted down slightly as requested
+            gridTop = canvas.height * 0.25; 
+            bottomTop = gridTop + GRID_SIZE * cellSize + cellSize;
+        }
         window.addEventListener('resize', resize);
         resize();
 
         function generatePiece() {
-            const proto = SHAPES[Math.floor(Math.random() * SHAPES.length)];
-            const w = Math.max(...proto.shape.map(p => p[0])) + 1;
-            const h = Math.max(...proto.shape.map(p => p[1])) + 1;
-            return { ...proto, w, h };
+            const shapeIdx = Math.floor(Math.random() * SHAPES.length);
+            const shape = SHAPES[shapeIdx].map(([x, y]) => [x, y]);
+            const colorIdx = Math.floor(Math.random() * COLORS.length);
+            const color = COLORS[colorIdx];
+            const w = Math.max(...shape.map(p => p[0])) + 1;
+            const h = Math.max(...shape.map(p => p[1])) + 1;
+            return { shape, color, w, h };
         }
 
-        function initPieces() {
-            pieces = [generatePiece(), generatePiece(), generatePiece()];
+        function initPieces() { pieces = [generatePiece(), generatePiece(), generatePiece()]; }
+
+        function applySkin() {
+            if (skinOn) {
+                COLORS = ['#ff4500', '#1e90ff', '#228b22', '#8a2be2', '#0000cd', '#f4a460', '#ff1493', '#00fa9a', '#b8860b', '#dc143c'];
+            } else {
+                COLORS = ['#ff7518', '#00bfff', '#32cd32', '#9932cc', '#4169e1', '#ffd700', '#ff69b4', '#ff1493', '#00ff7f', '#daa520'];
+            }
         }
 
-        // Draw Block - Glossy look like image
-        function drawBlock(x, y, color, size, alpha = 1) {
+        // --- Drawing ---
+        function lighten(color, percent) {
+            const num = parseInt(color.replace('#', ''), 16);
+            const amt = Math.round(2.55 * percent);
+            let R = (num >> 16) + amt;
+            let G = (num >> 8 & 0x00FF) + amt;
+            let B = (num & 0x0000FF) + amt;
+            return `rgb(${R > 255 ? 255 : R < 0 ? 0 : R},${G > 255 ? 255 : G < 0 ? 0 : G},${B > 255 ? 255 : B < 0 ? 0 : B})`;
+        }
+
+        function darken(color, percent) { return lighten(color, -percent); }
+
+        function drawBlock(x, y, color, size = cellSize, alpha = 1, isDragging = false) {
             ctx.save();
             ctx.globalAlpha = alpha;
-            
-            // Main body
-            ctx.fillStyle = color;
-            ctx.fillRect(x + 1, y + 1, size - 2, size - 2);
-
-            // Inner gloss/border effect
-            ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(x + 3, y + 3, size - 6, size - 6);
-
-            // Darker bottom edge
-            ctx.fillStyle = 'rgba(0,0,0,0.2)';
-            ctx.fillRect(x + 1, y + size - 4, size - 2, 3);
-            
+            if (isDragging) { ctx.shadowColor = '#fff'; ctx.shadowBlur = 10; }
+            const radius = size * 0.15;
+            roundRect(x + 1, y + 1, size - 2, size - 2, radius);
+            const grad = ctx.createLinearGradient(x, y, x, y + size);
+            grad.addColorStop(0, lighten(color, 25));
+            grad.addColorStop(1, darken(color, 25));
+            ctx.fillStyle = grad;
+            ctx.fill();
+            ctx.strokeStyle = lighten(color, 45);
+            ctx.lineWidth = 1;
+            ctx.stroke();
             ctx.restore();
         }
 
         function drawGrid() {
-            // Grid Background
-            ctx.fillStyle = COLORS.empty;
-            ctx.fillRect(gridLeft - 4, gridTop - 4, GRID_SIZE * cellSize + 8, GRID_SIZE * cellSize + 8);
-
-            // Grid Lines
-            ctx.strokeStyle = '#1a2a5e';
+            ctx.fillStyle = '#0d1b2a';
+            roundRect(gridLeft - 5, gridTop - 5, GRID_SIZE * cellSize + 10, GRID_SIZE * cellSize + 10, 15);
+            ctx.fill();
+            ctx.strokeStyle = '#ffffff15';
             ctx.lineWidth = 1;
-            for(let i=0; i<=GRID_SIZE; i++) {
+            for (let i = 0; i <= GRID_SIZE; i++) {
                 ctx.beginPath();
                 ctx.moveTo(gridLeft + i * cellSize, gridTop);
                 ctx.lineTo(gridLeft + i * cellSize, gridTop + GRID_SIZE * cellSize);
@@ -161,115 +188,139 @@
                 ctx.lineTo(gridLeft + GRID_SIZE * cellSize, gridTop + i * cellSize);
                 ctx.stroke();
             }
+        }
 
-            // Placed Blocks
+        function drawPlaced() {
             for (let r = 0; r < GRID_SIZE; r++) {
                 for (let c = 0; c < GRID_SIZE; c++) {
-                    if (grid[r][c]) {
-                        drawBlock(gridLeft + c * cellSize, gridTop + r * cellSize, grid[r][c], cellSize);
-                    }
+                    if (grid[r][c]) drawBlock(gridLeft + c * cellSize, gridTop + r * cellSize, grid[r][c]);
                 }
             }
         }
 
-        function drawUI() {
-            // Header: Crown and High Score
-            ctx.fillStyle = '#fbc02d';
-            ctx.font = 'bold 20px Arial';
-            ctx.textAlign = 'left';
-            ctx.fillText(`👑 ${highScore}`, 20, 40);
-
-            // Main Score
-            ctx.fillStyle = 'white';
-            ctx.font = 'bold 60px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText(score, canvas.width / 2, 80);
-
-            // Settings Gear
-            ctx.fillStyle = 'white';
-            ctx.font = '30px Arial';
-            ctx.textAlign = 'right';
-            ctx.fillText('⚙️', canvas.width - 20, 45);
-        }
-
         function drawPieces() {
             const slotW = canvas.width / 3;
+            const slotH = canvas.height - bottomTop;
             pieces.forEach((p, i) => {
-                const scale = 0.7;
-                p.homeX = i * slotW + (slotW - p.w * cellSize * scale) / 2;
-                p.homeY = bottomTop;
-                
-                p.shape.forEach(([dx, dy]) => {
-                    drawBlock(p.homeX + dx * cellSize * scale, p.homeY + dy * cellSize * scale, p.color, cellSize * scale);
-                });
+                const scaleX = (slotW * 0.8) / (p.w * cellSize);
+                const scaleY = (slotH * 0.8) / (p.h * cellSize);
+                p.scale = Math.min(scaleX, scaleY, 0.8);
+                p.homeX = i * slotW + (slotW - p.w * cellSize * p.scale) / 2;
+                p.homeY = bottomTop + (slotH - p.h * cellSize * p.scale) / 2;
+                for (const [dx, dy] of p.shape) {
+                    drawBlock(p.homeX + dx * cellSize * p.scale, p.homeY + dy * cellSize * p.scale, p.color, cellSize * p.scale);
+                }
             });
         }
 
+        function drawUI() {
+            // Highscore
+            ctx.fillStyle = '#ffcc00';
+            ctx.font = `bold ${cellSize * 0.5}px Arial`;
+            ctx.textAlign = 'left';
+            ctx.fillText(`👑 ${highScore}`, 20, 40);
+
+            // Current Score - Small as requested
+            ctx.fillStyle = 'white';
+            ctx.font = `bold ${cellSize * 1.1}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.fillText(`${score}`, canvas.width / 2, 80);
+
+            // Gear Icon
+            ctx.fillStyle = '#fff';
+            ctx.font = `${cellSize * 0.7}px Arial`;
+            ctx.textAlign = 'right';
+            ctx.fillText('⚙️', canvas.width - 20, 40);
+        }
+
+        function roundRect(x, y, w, h, r) {
+            ctx.beginPath();
+            ctx.roundRect(x, y, w, h, r);
+            ctx.closePath();
+        }
+
+        // --- Settings Panel (Vertical as requested) ---
         function drawSettings() {
             if (!settingsOpen) return;
-
-            // Overlay
             ctx.fillStyle = 'rgba(0,0,0,0.7)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Vertical Panel (Matches Image 1)
-            const w = 300;
-            const h = 450;
-            const x = (canvas.width - w) / 2;
-            const y = (canvas.height - h) / 2;
+            const panelW = 280;
+            const panelH = 420;
+            const panelX = (canvas.width - panelW) / 2;
+            const panelY = (canvas.height - panelH) / 2;
 
-            // Box
-            ctx.fillStyle = '#4a69bd';
-            ctx.roundRect ? ctx.roundRect(x, y, w, h, 15) : ctx.fillRect(x, y, w, h);
+            ctx.fillStyle = '#3d5a80';
+            roundRect(panelX, panelY, panelW, panelH, 20);
             ctx.fill();
 
-            // Header
-            ctx.fillStyle = 'white';
+            ctx.fillStyle = '#fff';
             ctx.font = 'bold 24px Arial';
             ctx.textAlign = 'center';
-            ctx.fillText('Settings', x + w/2, y + 40);
-            ctx.fillText('✕', x + w - 30, y + 40);
-
-            // Top Buttons (Sound, BGM, Skin)
-            const iconY = y + 80;
-            drawSettingIcon(x + 60, iconY, '🔊', 'Sound', soundOn);
-            drawSettingIcon(x + 150, iconY, '🎵', 'BGM', bgmOn);
-            drawSettingIcon(x + 240, iconY, '👕', 'Skin', true);
-
-            // List Buttons (Green Buttons like image)
-            const btnW = 240;
-            const btnH = 50;
-            const btnX = x + (w - btnW) / 2;
-            
-            drawListButton(btnX, y + 180, btnW, btnH, '🎮 More Games', '#44bd32');
-            drawListButton(btnX, y + 245, btnW, btnH, '⚙️ More Settings', '#44bd32');
-            drawListButton(btnX, y + 310, btnW, btnH, '🏠 Home', '#44bd32');
-            drawListButton(btnX, y + 375, btnW, btnH, '🔄 Replay', '#44bd32');
-        }
-
-        function drawSettingIcon(x, y, icon, label, active) {
+            ctx.fillText('Settings', canvas.width / 2, panelY + 40);
             ctx.font = '30px Arial';
-            ctx.fillText(icon, x, y);
-            if (!active) {
-                ctx.strokeStyle = 'red';
-                ctx.lineWidth = 3;
-                ctx.beginPath(); ctx.moveTo(x-15, y-15); ctx.lineTo(x+15, y+15); ctx.stroke();
-            }
-            ctx.font = '14px Arial';
-            ctx.fillText(label, x, y + 30);
+            ctx.fillText('✕', panelX + panelW - 30, panelY + 40);
+
+            const itemX = panelX + 40;
+            const itemY = panelY + 100;
+            
+            // Draw Toggles
+            drawToggleRow('Sound', itemY, soundOn);
+            drawToggleRow('BGM', itemY + 60, bgmOn);
+            drawToggleRow('Skin', itemY + 120, skinOn);
+
+            // Vertical Buttons
+            const btnW = 220;
+            const btnH = 45;
+            const btnX = panelX + (panelW - btnW) / 2;
+            drawRectBtn(btnX, itemY + 180, btnW, btnH, '🎮 More Games', '#4caf50');
+            drawRectBtn(btnX, itemY + 235, btnW, btnH, '⚙️ More Settings', '#4caf50');
+            drawRectBtn(btnX, itemY + 290, btnW, btnH, '🔄 Replay', '#e67e22');
         }
 
-        function drawListButton(x, y, w, h, text, color) {
-            ctx.fillStyle = color;
-            ctx.roundRect ? ctx.roundRect(x, y, w, h, 10) : ctx.fillRect(x, y, w, h);
+        function drawToggleRow(label, y, on) {
+            ctx.fillStyle = '#fff';
+            ctx.font = '18px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText(label, (canvas.width - 200) / 2, y + 15);
+            
+            const tx = (canvas.width + 80) / 2;
+            const tw = 40;
+            const th = 22;
+            roundRect(tx, y, tw, th, th/2);
+            ctx.fillStyle = on ? '#4caf50' : '#888';
             ctx.fill();
-            ctx.fillStyle = 'white';
-            ctx.font = 'bold 18px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText(text, x + w/2, y + h/2 + 6);
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(on ? tx + tw - 11 : tx + 11, y + 11, 8, 0, Math.PI * 2);
+            ctx.fill();
         }
 
-        // Logic
+        function drawRectBtn(x, y, w, h, text, color) {
+            roundRect(x, y, w, h, 10);
+            ctx.fillStyle = color;
+            ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 16px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(text, x + w / 2, y + h / 2 + 6);
+        }
+
+        function drawGameOver() {
+            if (!gameOver) return;
+            ctx.fillStyle = 'rgba(0,0,0,0.85)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#ffd700';
+            ctx.font = 'bold 40px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Game Over', canvas.width / 2, canvas.height / 2 - 40);
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 60px Arial';
+            ctx.fillText(`${score}`, canvas.width / 2, canvas.height / 2 + 40);
+            drawRectBtn(canvas.width / 2 - 75, canvas.height / 2 + 100, 150, 50, 'RESTART', '#ff8c00');
+        }
+
+        // --- Core Logic ---
         function canPlace(piece, row, col) {
             if (row < 0 || col < 0 || row + piece.h > GRID_SIZE || col + piece.w > GRID_SIZE) return false;
             for (const [dx, dy] of piece.shape) {
@@ -278,146 +329,125 @@
             return true;
         }
 
-        function checkLines() {
-            let linesCleared = 0;
-            let rowsToClear = [];
-            let colsToClear = [];
-
-            // Rows
+        function clearLines() {
+            let fullRows = [], fullCols = [];
             for (let r = 0; r < GRID_SIZE; r++) {
-                if (grid[r].every(c => c !== null)) rowsToClear.push(r);
+                if (grid[r].every(c => c !== null)) fullRows.push(r);
             }
-            // Cols
             for (let c = 0; c < GRID_SIZE; c++) {
-                let full = true;
-                for (let r = 0; r < GRID_SIZE; r++) if (grid[r][c] === null) full = false;
-                if (full) colsToClear.push(c);
+                let colFull = true;
+                for (let r = 0; r < GRID_SIZE; r++) if (grid[r][c] === null) colFull = false;
+                if (colFull) fullCols.push(c);
             }
 
-            rowsToClear.forEach(r => grid[r].fill(null));
-            colsToClear.forEach(c => { for (let r = 0; r < GRID_SIZE; r++) grid[r][c] = null; });
+            const totalCleared = fullRows.length + fullCols.length;
+            if (totalCleared > 0) {
+                // Effects
+                fullRows.forEach(r => grid[r].forEach((color, c) => emitParticles(gridLeft + c * cellSize + cellSize/2, gridTop + r * cellSize + cellSize/2, color)));
+                fullCols.forEach(c => { for(let r=0; r<GRID_SIZE; r++) emitParticles(gridLeft + c * cellSize + cellSize/2, gridTop + r * cellSize + cellSize/2, grid[r][c]); });
+                
+                playClearSound(totalCleared);
+                
+                // SCORE INCREASES ONLY ON LINE CLEAR
+                score += totalCleared * 100 * totalCleared;
+                if (score > highScore) { highScore = score; localStorage.setItem('highScore', highScore); }
+                
+                // Remove blocks
+                fullRows.forEach(r => grid[r].fill(null));
+                fullCols.forEach(c => { for (let r = 0; r < GRID_SIZE; r++) grid[r][c] = null; });
+            }
+            return totalCleared;
+        }
 
-            linesCleared = rowsToClear.length + colsToClear.length;
-            
-            // SCORE ONLY INCREASES ON LINE CLEAR
-            if (linesCleared > 0) {
-                score += (linesCleared * 100); 
-                if (score > highScore) {
-                    highScore = score;
-                    localStorage.setItem('highScore', highScore);
-                }
+        function emitParticles(x, y, color) {
+            for(let i=0; i<6; i++) {
+                particles.push({x, y, vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10, color, life: 1, size: Math.random()*5+2});
             }
         }
 
-        function isGameOver() {
-            for (const p of pieces) {
-                for (let r = 0; r <= GRID_SIZE - p.h; r++) {
-                    for (let c = 0; c <= GRID_SIZE - p.w; c++) {
-                        if (canPlace(p, r, c)) return false;
-                    }
-                }
-            }
-            return true;
-        }
-
-        // Input Handling
-        function getPos(e) {
-            const t = e.touches ? e.touches[0] : e;
-            return { x: t.clientX, y: t.clientY };
-        }
-
-        canvas.addEventListener('pointerdown', e => {
+        function handlePointerDown(e) {
+            e.preventDefault();
             const pos = getPos(e);
-            
-            // Settings Toggle
-            if (pos.x > canvas.width - 60 && pos.y < 60) {
-                settingsOpen = !settingsOpen;
+            if (gameOver) {
+                if (pos.x > canvas.width/2 - 75 && pos.x < canvas.width/2 + 75 && pos.y > canvas.height/2 + 100 && pos.y < canvas.height/2 + 150) location.reload();
                 return;
             }
-
             if (settingsOpen) {
-                if (pos.y > (canvas.height/2 + 150)) settingsOpen = false; // Close on bottom click
+                if (pos.x > canvas.width - 80 && pos.y < 80) settingsOpen = false;
                 return;
             }
-
-            // Piece selection
-            const slotW = canvas.width / 3;
+            if (pos.x > canvas.width - 60 && pos.y < 60) { settingsOpen = true; return; }
+            
             pieces.forEach((p, i) => {
-                const scale = 0.7;
-                if (pos.x > p.homeX && pos.x < p.homeX + p.w*cellSize*scale && 
-                    pos.y > p.homeY && pos.y < p.homeY + p.h*cellSize*scale) {
-                    dragging = p;
-                    dragging.index = i;
-                    offsetX = pos.x - p.homeX;
-                    offsetY = pos.y - p.homeY;
+                if (pos.x > p.homeX && pos.x < p.homeX + p.w * cellSize * p.scale && pos.y > p.homeY && pos.y < p.homeY + p.h * cellSize * p.scale) {
+                    dragging = p; dragging.index = i;
+                    offsetX = pos.x - p.homeX; offsetY = pos.y - p.homeY;
+                    pieces.splice(i, 1);
+                    playSound(NOTES.C5, 0.05, 'square', 0.2);
                 }
             });
-        });
-
-        canvas.addEventListener('pointermove', e => {
-            if (!dragging) return;
-            const pos = getPos(e);
-            dragging.curX = pos.x - offsetX;
-            dragging.curY = pos.y - offsetY;
-
-            candidateCol = Math.round((dragging.curX - gridLeft) / cellSize);
-            candidateRow = Math.round((dragging.curY - gridTop) / cellSize);
-        });
-
-        canvas.addEventListener('pointerup', () => {
-            if (!dragging) return;
-
-            if (canPlace(dragging, candidateRow, candidateCol)) {
-                dragging.shape.forEach(([dx, dy]) => {
-                    grid[candidateRow + dy][candidateCol + dx] = dragging.color;
-                });
-                pieces.splice(dragging.index, 1);
-                checkLines();
-                if (pieces.length === 0) initPieces();
-                if (isGameOver()) gameOver = true;
-            }
-
-            dragging = null;
-            candidateRow = -1;
-            candidateCol = -1;
-        });
-
-        function animate() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            drawGrid();
-            drawUI();
-            drawPieces();
-
-            if (dragging) {
-                const isValid = canPlace(dragging, candidateRow, candidateCol);
-                dragging.shape.forEach(([dx, dy]) => {
-                    const drawX = dragging.curX + dx * cellSize;
-                    const drawY = dragging.curY + dy * cellSize;
-                    drawBlock(drawX, drawY, dragging.color, cellSize, isValid ? 1 : 0.5);
-                });
-            }
-
-            if (gameOver) {
-                ctx.fillStyle = 'rgba(0,0,0,0.8)';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.fillStyle = 'white';
-                ctx.font = 'bold 40px Arial';
-                ctx.textAlign = 'center';
-                ctx.fillText('GAME OVER', canvas.width/2, canvas.height/2);
-                ctx.font = '20px Arial';
-                ctx.fillText('Tap to Restart', canvas.width/2, canvas.height/2 + 50);
-            }
-
-            drawSettings();
-            requestAnimationFrame(animate);
         }
 
-        canvas.addEventListener('click', () => { if(gameOver) location.reload(); });
+        function handlePointerMove(e) {
+            if (!dragging) return;
+            const pos = getPos(e);
+            candidateCol = Math.floor((pos.x - offsetX - gridLeft) / cellSize);
+            candidateRow = Math.floor((pos.y - offsetY - gridTop) / cellSize);
+        }
 
+        function handlePointerUp() {
+            if (!dragging) return;
+            if (canPlace(dragging, candidateRow, candidateCol)) {
+                dragging.shape.forEach(([dx, dy]) => grid[candidateRow + dy][candidateCol + dx] = dragging.color);
+                playSound(NOTES.G4, 0.1, 'sine', 0.3);
+                clearLines();
+                pieces.push(generatePiece());
+                if (!pieces.some(p => {
+                    for(let r=0; r<=GRID_SIZE-p.h; r++) for(let c=0; c<=GRID_SIZE-p.w; c++) if(canPlace(p,r,c)) return true;
+                    return false;
+                })) gameOver = true;
+            } else {
+                pieces.splice(dragging.index, 0, dragging);
+            }
+            dragging = null;
+        }
+
+        function getPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            const t = e.touches ? e.touches[0] : e;
+            return { x: t.clientX - rect.left, y: t.clientY - rect.top };
+        }
+
+        canvas.addEventListener('pointerdown', handlePointerDown);
+        canvas.addEventListener('pointermove', handlePointerMove);
+        canvas.addEventListener('pointerup', handlePointerUp);
+
+        function animate(time) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles = particles.filter(p => {
+                p.x += p.vx; p.y += p.vy; p.life -= 0.02;
+                if (p.life > 0) {
+                    ctx.globalAlpha = p.life; ctx.fillStyle = p.color;
+                    ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
+                    return true;
+                }
+                return false;
+            });
+            ctx.globalAlpha = 1;
+            drawGrid();
+            drawPlaced();
+            drawPieces();
+            if (dragging) {
+                const valid = canPlace(dragging, candidateRow, candidateCol);
+                dragging.shape.forEach(([dx, dy]) => drawBlock(gridLeft + (candidateCol + dx) * cellSize, gridTop + (candidateRow + dy) * cellSize, dragging.color, cellSize, valid ? 1 : 0.5));
+            }
+            drawUI();
+            drawSettings();
+            drawGameOver();
+            requestAnimationFrame(animate);
+        }
         initPieces();
         animate();
-
     </script>
 </body>
 </html>
