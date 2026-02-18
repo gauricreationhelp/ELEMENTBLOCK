@@ -157,10 +157,10 @@
         function resize() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
-            cellSize = Math.floor(Math.min(canvas.width / (GRID_SIZE + 2), canvas.height / (GRID_SIZE + 4)));
+            cellSize = Math.floor(Math.min(canvas.width / GRID_SIZE * 0.95, canvas.height / (GRID_SIZE + 3)));
             gridLeft = (canvas.width - GRID_SIZE * cellSize) / 2;
-            gridTop = cellSize * 2; // Increased space at top
-            bottomTop = gridTop + GRID_SIZE * cellSize + cellSize * 0.5;
+            gridTop = cellSize * 1.5;
+            bottomTop = gridTop + GRID_SIZE * cellSize + cellSize * 0.2; // Reduced space
         }
         window.addEventListener('resize', resize);
         resize();
@@ -224,6 +224,11 @@
             ctx.strokeStyle = lighten(color, 40);
             ctx.lineWidth = 1;
             ctx.stroke();
+            if (isDragging) {
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(x + 1, y + 1, size - 2, size - 2);
+            }
             ctx.restore();
         }
 
@@ -282,10 +287,10 @@
             ctx.textBaseline = 'middle';
             ctx.fillText(`👑 ${highScore}`, cellSize * 0.5, cellSize * 0.8);
             ctx.fillStyle = 'white';
-            ctx.font = `${cellSize * 1.5}px Arial`; // Smaller font
+            ctx.font = `${cellSize * 1.5}px Arial`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(`${score}`, canvas.width / 2, cellSize * 0.8); // Moved up
+            ctx.fillText(`${score}`, canvas.width / 2, cellSize * 0.8);
             ctx.fillStyle = '#a0a0a0';
             ctx.font = `${cellSize * 0.8}px Arial`;
             ctx.textAlign = 'right';
@@ -573,7 +578,7 @@
                 let bonus = 0;
                 if (cleared >= 2) {
                     bonus = (cleared - 1) * 100 * cleared;
-                    addScorePopup(bonus, gridLeft + GRID_SIZE * cellSize / 2, gridTop + GRID_SIZE * cellSize / 2 + cellSize, '#00ff00'); // Separate bonus popup in green
+                    addScorePopup(bonus, gridLeft + GRID_SIZE * cellSize / 2, gridTop + GRID_SIZE * cellSize / 2 + cellSize, '#00ff00');
                 }
                 const totalAdded = pieceScore + clearScore + bonus;
                 score += totalAdded;
