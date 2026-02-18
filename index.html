@@ -152,15 +152,25 @@
             playSound(NOTES.C6 + count * 50, 0.3 + count * 0.1, 'triangle', 0.4);
         }
 
-        // Resize and layout
+        // Resize and layout – Optimized for mobile (full screen grid, minimal gap)
         let cellSize, gridLeft, gridTop, bottomTop;
         function resize() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
-            cellSize = Math.floor(Math.min(canvas.width / (GRID_SIZE + 2), canvas.height / (GRID_SIZE + 4)));
+
+            // Grid ko maximum vertical space do, niche gap bilkul kam
+            const maxPossibleCell = Math.min(
+                canvas.width / GRID_SIZE,
+                (canvas.height * 0.78) / GRID_SIZE   // ~78% height grid ke liye
+            );
+
+            cellSize = Math.floor(maxPossibleCell);
+
             gridLeft = (canvas.width - GRID_SIZE * cellSize) / 2;
-            gridTop = cellSize * 2; // Increased space at top
-            bottomTop = gridTop + GRID_SIZE * cellSize + cellSize * 0.5;
+            gridTop = Math.max(cellSize * 1.2, (canvas.height - GRID_SIZE * cellSize - 120) / 2); // top pe thoda margin
+
+            // Niche pieces ke liye minimum space
+            bottomTop = gridTop + GRID_SIZE * cellSize + cellSize * 0.8; // kam space niche
         }
         window.addEventListener('resize', resize);
         resize();
@@ -179,7 +189,6 @@
             pieces = [generatePiece(), generatePiece(), generatePiece()];
         }
 
-        // Skin toggle - change colors
         function applySkin() {
             if (skinOn) {
                 COLORS = ['#ff4500', '#1e90ff', '#228b22', '#8a2be2', '#0000cd', '#f4a460', '#ff1493', '#00fa9a', '#b8860b', '#dc143c'];
@@ -263,12 +272,12 @@
 
         function drawPieces() {
             const slotWidth = canvas.width / 3;
-            const slotHeight = canvas.height - bottomTop - cellSize * 0.3;
+            const slotHeight = canvas.height - bottomTop; // ab niche ka space kam
             for (let i = 0; i < pieces.length; i++) {
                 const p = pieces[i];
-                const scaleX = (slotWidth * 0.88) / (p.w * cellSize);
-                const scaleY = (slotHeight * 0.88) / (p.h * cellSize);
-                p.scale = Math.min(scaleX, scaleY, 0.95);
+                const scaleX = (slotWidth * 0.9) / (p.w * cellSize);
+                const scaleY = (slotHeight * 0.85) / (p.h * cellSize);
+                p.scale = Math.min(scaleX, scaleY, 1.0);
                 p.homeX = i * slotWidth + (slotWidth - p.w * cellSize * p.scale) / 2;
                 p.homeY = bottomTop + (slotHeight - p.h * cellSize * p.scale) / 2;
                 drawPiece(p, p.homeX, p.homeY, p.scale);
@@ -282,10 +291,10 @@
             ctx.textBaseline = 'middle';
             ctx.fillText(`👑 ${highScore}`, cellSize * 0.5, cellSize * 0.8);
             ctx.fillStyle = 'white';
-            ctx.font = `${cellSize * 1.5}px Arial`; // Smaller font
+            ctx.font = `${cellSize * 1.5}px Arial`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(`${score}`, canvas.width / 2, cellSize * 0.8); // Moved up
+            ctx.fillText(`${score}`, canvas.width / 2, cellSize * 0.8);
             ctx.fillStyle = '#a0a0a0';
             ctx.font = `${cellSize * 0.8}px Arial`;
             ctx.textAlign = 'right';
@@ -423,7 +432,6 @@
             }
             const clearedCount = fullRows.length + fullCols.length;
             if (clearedCount === 0) return 0;
-            // Particles and sound
             fullRows.forEach(r => {
                 for (let c = 0; c < GRID_SIZE; c++) emitParticles(gridLeft + c * cellSize + cellSize / 2, gridTop + r * cellSize + cellSize / 2, grid[r][c]);
             });
@@ -431,9 +439,7 @@
                 for (let r = 0; r < GRID_SIZE; r++) if (!fullRows.includes(r)) emitParticles(gridLeft + c * cellSize + cellSize / 2, gridTop + r * cellSize + cellSize / 2, grid[r][c]);
             });
             playClearSound(clearedCount);
-            // Combo logic
             let comboText = '';
-            let comboColor = '#ff4500';
             if (clearedCount === 2) {
                 comboText = 'Good!';
                 speak('Good');
@@ -447,7 +453,6 @@
             if (comboText) {
                 addComboPopup(comboText, canvas.width / 2, gridTop + GRID_SIZE * cellSize / 2 + cellSize);
             }
-            // Clear
             fullRows.forEach(r => grid[r].fill(null));
             fullCols.forEach(c => { for (let r = 0; r < GRID_SIZE; r++) grid[r][c] = null; });
             return clearedCount;
@@ -573,7 +578,7 @@
                 let bonus = 0;
                 if (cleared >= 2) {
                     bonus = (cleared - 1) * 100 * cleared;
-                    addScorePopup(bonus, gridLeft + GRID_SIZE * cellSize / 2, gridTop + GRID_SIZE * cellSize / 2 + cellSize, '#00ff00'); // Separate bonus popup in green
+                    addScorePopup(bonus, gridLeft + GRID_SIZE * cellSize / 2, gridTop + GRID_SIZE * cellSize / 2 + cellSize, '#00ff00');
                 }
                 const totalAdded = pieceScore + clearScore + bonus;
                 score += totalAdded;
