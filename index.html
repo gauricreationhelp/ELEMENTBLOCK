@@ -91,6 +91,7 @@
             if (!soundOn) return;
             const utterance = new SpeechSynthesisUtterance(text);
             utterance.volume = 1.0;
+            utterance.rate = 0.7; // Slow pronunciation
             speechSynth.speak(utterance);
         }
 
@@ -170,26 +171,28 @@
             playSound(NOTES.C6 + count * 50, 0.3 + count * 0.1, 'triangle', 0.4);
         }
 
-        // ──────────────── CHANGED ────────────────
-        // Grid ko thoda niche kiya (top margin badhaya)
+        // ──────────────── UPDATED RESIZE FOR LEFT/RIGHT GAP AND FOOTER SPACE ────────────────
         let cellSize, gridLeft, gridTop, bottomTop;
         function resize() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
 
+            const sidePadding = 20; // Gap from left and right
+            const footerHeight = 90 + 20; // Footer + extra space to avoid crushing
+
             const maxPossibleCell = Math.min(
-                canvas.width / GRID_SIZE,
-                (canvas.height * 0.68) / GRID_SIZE   // ← yaha 0.78 → 0.68 karke niche kiya
+                (canvas.width - 2 * sidePadding) / GRID_SIZE,
+                (canvas.height - footerHeight) * 0.68 / GRID_SIZE
             );
 
             cellSize = Math.floor(maxPossibleCell);
 
-            gridLeft = (canvas.width - GRID_SIZE * cellSize) / 2;
-            gridTop = Math.max(cellSize * 2.2, (canvas.height - GRID_SIZE * cellSize - 140) / 2); // ← top margin badhaya
+            gridLeft = sidePadding + (canvas.width - 2 * sidePadding - GRID_SIZE * cellSize) / 2;
+            gridTop = Math.max(cellSize * 2.2, (canvas.height - footerHeight - GRID_SIZE * cellSize - 140) / 2);
 
             bottomTop = gridTop + GRID_SIZE * cellSize + cellSize * 0.8;
         }
-        // ────────────────────────────────────────
+        // ────────────────────────────────────────────────────────────────────────────────────
 
         window.addEventListener('resize', resize);
         resize();
@@ -463,14 +466,15 @@
                 comboText = 'Good!';
                 speak('Good');
             } else if (clearedCount === 3) {
-                comboText = 'Better!';
-                speak('Better');
+                comboText = 'Wow!';
+                speak('Wow');
             } else if (clearedCount >= 4) {
-                comboText = 'Best!';
-                speak('Best');
+                comboText = 'Great!';
+                speak('Great');
             }
             if (comboText) {
                 addComboPopup(comboText, canvas.width / 2, gridTop + GRID_SIZE * cellSize / 2 + cellSize);
+                addComboPopup('Combo Bonus!', canvas.width / 2, gridTop + GRID_SIZE * cellSize / 2 + cellSize * 2); // Added combo bonus text
             }
 
             fullRows.forEach(r => grid[r].fill(null));
